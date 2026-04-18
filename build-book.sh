@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build book.html from chapter markdown files in a breakdown directory
+# Build breakdown.html from chapter markdown files in a breakdown directory
 # Usage: ./build-book.sh <breakdown-dir>
 # Example: ./build-book.sh machine-learning
 
@@ -14,7 +14,7 @@ fi
 BREAKDOWN_DIR="$(cd "$1" && pwd)"
 CHAPTERS_DIR="$BREAKDOWN_DIR/chapters"
 OUTLINE="$BREAKDOWN_DIR/outline.md"
-OUTPUT="$BREAKDOWN_DIR/book.html"
+OUTPUT="$BREAKDOWN_DIR/breakdown.html"
 
 # Verify pandoc exists
 if ! command -v pandoc &>/dev/null; then

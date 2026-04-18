@@ -133,6 +133,11 @@ WRITING INSTRUCTIONS:
 - 10-20 minutes reading time.
 - Engaging, clear, direct. Not robotic.
 - Avoid jargon not yet explained.
+- NEVER use robot tells: "Let us now consider...", "It is important to note...", "As we discussed...", "In this chapter we will...". Write like a human.
+- Don't repeat the same idea in different words — state it once, clearly.
+- Vary sentence rhythm. Short after long. Don't let every sentence be the same length.
+- Transitions should feel natural, not mechanical. Don't announce what you're about to do — just do it.
+- Use consistent terminology — if you call it "gradient" in paragraph 2, don't switch to "slope of the loss" in paragraph 8 without reason.
 
 VISUALS:
 - Include visuals inline in the markdown as raw HTML blocks.
@@ -157,7 +162,7 @@ Make this chapter [specific tone guidance based on position in breakdown — e.g
 
 ### Visuals (Rendering Skills)
 
-Chapters should include visuals — both conceptual diagrams and domain-specific artifact renders — as inline HTML blocks in the markdown. Pandoc passes raw HTML through unchanged into `book.html`.
+Chapters should include visuals — both conceptual diagrams and domain-specific artifact renders — as inline HTML blocks in the markdown. Pandoc passes raw HTML through unchanged into `breakdown.html`.
 
 Sub-agents handle visuals autonomously. You do NOT need to manage skills — each chapter agent reads `skills/index.md` itself, decides which rendering skills are relevant, and loads them.
 
@@ -187,9 +192,11 @@ If any visual reports EMPTY, fix the rendering code in your chapter and re-run u
 
 ---
 
-## Part 3: Refinement Pass
+## Part 3: Refinement Pass (Optional)
 
-After all chapters are written, run **one** refinement pass. Spawn agents in batches of 3-4 chapters each.
+**Only run this step if the student explicitly asks for refinement** (e.g., "refine it", "clean it up", "do a polish pass"). Do NOT run it by default.
+
+When requested, run **one** refinement pass. Spawn agents in batches of 3-4 chapters each.
 
 Each agent reads its chapters and edits them IN PLACE:
 - Remove repetition within chapters (same idea stated multiple ways)
@@ -204,9 +211,9 @@ Each agent reads its chapters and edits them IN PLACE:
 
 ---
 
-## Part 5: Compile to Book (Single HTML File)
+## Part 4: Compile to Book (Single HTML File)
 
-After refinement passes, compile all chapters into `book.html` by running the deterministic build script:
+After writing (and optional refinement), compile all chapters into `breakdown.html` by running the deterministic build script:
 
 ```bash
 ./build-book.sh [topic-slug]/
@@ -217,7 +224,7 @@ This script (`build-book.sh` in the working directory root) uses pandoc to conve
 - Converts each `chapters/*.md` file to HTML via pandoc
 - Generates a table of contents with anchor links
 - Wraps everything in a styled HTML template (Georgia serif, warm earth tones, mobile-responsive)
-- Outputs `book.html` in the breakdown directory
+- Outputs `breakdown.html` in the breakdown directory
 
 **Requirements**: pandoc must be installed. No LLM agent needed — this is a deterministic transformation.
 
@@ -233,9 +240,8 @@ You respond:
 1. Generate full outline for ML from first principles
 2. Get user approval
 3. Spawn agents to write all chapters (with diagrams)
-4. Run one refinement pass (batches of 3-4 chapters)
-5. Run `./build-book.sh machine-learning/` to compile book.html
-6. Report completion with stats
+4. Run `./build-book.sh machine-learning/` to compile breakdown.html
+5. Report completion with stats
 
 ---
 
@@ -250,7 +256,7 @@ All breakdown material goes inside a dedicated folder named after the topic (e.g
 │   ├── 01-[slug].md
 │   ├── 02-[slug].md
 │   └── ...
-├── book.html                # Compiled single-file book (final deliverable)
+├── breakdown.html                # Compiled single-file book (final deliverable)
 └── README.md               # Overview & reading order
 ```
 
@@ -295,6 +301,6 @@ When user provides a topic, respond:
 2. Confirm the starting point with the student
 3. Generate complete outline calibrated to their level
 4. "Review this. Once approved, I'll write all chapters."
-5. On approval → spawn all chapter agents (with diagrams) → one refinement pass → run `./build-book.sh [topic]/` → done
+5. On approval → spawn all chapter agents (with diagrams) → run `./build-book.sh [topic]/` → done (refinement only if requested)
 
 Let's build something great.

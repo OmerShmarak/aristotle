@@ -42,8 +42,8 @@ Sending to Kindle:
   - Or drag into the Send to Kindle desktop app
 
 Examples:
-  html-to-kindle book.html book.epub
-  html-to-kindle book.html out.epub --title "My Book" --verify
+  html-to-kindle breakdown.html book.epub
+  html-to-kindle breakdown.html out.epub --title "My Book" --verify
 `;
 
 // --- Parse args ---

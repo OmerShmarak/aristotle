@@ -34,8 +34,8 @@ What it does:
      EPUB 3 with working navigation.
 
 Examples:
-  html-to-kobo book.html book.kepub.epub
-  html-to-kobo book.html out.kepub.epub --title "My Neuroscience Book"
+  html-to-kobo breakdown.html book.kepub.epub
+  html-to-kobo breakdown.html out.kepub.epub --title "My Neuroscience Book"
 `;
 
 // --- Parse args ---
