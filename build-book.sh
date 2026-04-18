@@ -4,7 +4,6 @@ set -euo pipefail
 # Build book.html from chapter markdown files in a breakdown directory
 # Usage: ./build-book.sh <breakdown-dir>
 # Example: ./build-book.sh machine-learning
-# Requires: pandoc
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <breakdown-directory>" >&2

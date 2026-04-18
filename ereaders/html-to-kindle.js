@@ -5,7 +5,7 @@
  * Kindle accepts standard EPUB3 files via Send to Kindle (email, web, or app).
  * This script produces a clean EPUB3 with conservative CSS for Kindle's renderer.
  *
- * Requires: puppeteer (npm install puppeteer), pandoc (brew install pandoc)
+ * Requires: puppeteer (npm install), pandoc
  */
 
 const puppeteer = require('puppeteer');
@@ -84,7 +84,7 @@ if (!inputPath.match(/\.html?$/i)) fail(`Input must be an HTML file (got: ${path
 
 // Verify pandoc is available
 try { execSync('pandoc --version', { stdio: 'ignore' }); }
-catch { fail('pandoc is not installed. Run: brew install pandoc'); }
+catch { fail('pandoc is not installed. See https://pandoc.org/installing.html'); }
 
 // --- Convert ---
 (async () => {

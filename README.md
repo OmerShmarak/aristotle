@@ -8,6 +8,18 @@ Learn everything.
 npm install
 ```
 
+Install [pandoc](https://pandoc.org/installing.html):
+```
+# macOS
+brew install pandoc
+
+# Windows
+choco install pandoc   # or: scoop install pandoc
+
+# Linux
+sudo apt install pandoc
+```
+
 Edit `PROFILE.md` with your background, how you learn, and what you care about. Then:
 
 ```
@@ -76,4 +88,4 @@ For Kindle, email the `.epub` to your `@kindle.com` address, or use [Send to Kin
 
 - [Claude Code](https://claude.ai/claude-code)
 - Node.js
-- [pandoc](https://pandoc.org/) (`brew install pandoc`)
+- [pandoc](https://pandoc.org/installing.html)

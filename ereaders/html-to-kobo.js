@@ -2,7 +2,7 @@
 /**
  * html-to-kobo — Convert an HTML book (with <canvas> illustrations) to a Kobo-compatible EPUB.
  *
- * Requires: puppeteer (npm install puppeteer), pandoc (brew install pandoc)
+ * Requires: puppeteer (npm install), pandoc
  */
 
 const puppeteer = require('puppeteer');
@@ -75,7 +75,7 @@ if (!inputPath.match(/\.html?$/i)) fail(`Input must be an HTML file (got: ${path
 
 // Verify pandoc is available
 try { execSync('pandoc --version', { stdio: 'ignore' }); }
-catch { fail('pandoc is not installed. Run: brew install pandoc'); }
+catch { fail('pandoc is not installed. See https://pandoc.org/installing.html'); }
 
 // --- Convert ---
 (async () => {
