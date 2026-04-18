@@ -5,58 +5,22 @@ import { ChapterTracker } from '../lib/tracker.js';
 
 const e = React.createElement;
 
-// ─── Text smoother ─────────────────────────────────────
-// Buffers incoming token chunks and drips them out at a steady rate
-// so rendering feels smooth regardless of how bursty the source is.
-function useTextSmoother(charsPerTick = 3, tickMs = 16) {
+// ─── Streaming text hook ────────────────────────────────
+// Appends tokens immediately as they arrive. No buffering.
+function useStreamingText() {
   const [display, setDisplay] = useState('');
-  const bufferRef = useRef('');
-  const timerRef = useRef(null);
-  const displayRef = useRef('');
-
-  const startDrip = useCallback(() => {
-    if (timerRef.current) return;
-    timerRef.current = setInterval(() => {
-      if (bufferRef.current.length === 0) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        return;
-      }
-      const take = Math.min(charsPerTick, bufferRef.current.length);
-      const chars = bufferRef.current.slice(0, take);
-      bufferRef.current = bufferRef.current.slice(take);
-      displayRef.current += chars;
-      setDisplay(displayRef.current);
-    }, tickMs);
-  }, [charsPerTick, tickMs]);
+  const ref = useRef('');
 
   const append = useCallback((text) => {
-    bufferRef.current += text;
-    startDrip();
-  }, [startDrip]);
-
-  const flush = useCallback(() => {
-    // Immediately display everything remaining
-    if (bufferRef.current.length > 0) {
-      displayRef.current += bufferRef.current;
-      bufferRef.current = '';
-      setDisplay(displayRef.current);
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    const final = displayRef.current;
-    displayRef.current = '';
-    setDisplay('');
-    return final;
+    ref.current += text;
+    setDisplay(ref.current);
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+  const flush = useCallback(() => {
+    const final = ref.current;
+    ref.current = '';
+    setDisplay('');
+    return final;
   }, []);
 
   return { display, append, flush };
@@ -116,7 +80,7 @@ export function App({ engine, banner, topic }) {
   const [tracker] = useState(() => new ChapterTracker());
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [started, setStarted] = useState(false);
-  const smoother = useTextSmoother(3, 16); // 3 chars every 16ms ≈ ~180 chars/sec
+  const smoother = useStreamingText();
 
   // Wire engine events to React state
   useEffect(() => {

@@ -69,6 +69,9 @@ export class Engine extends EventEmitter {
     // Forward relevant events
     switch (event.type) {
       case 'text':
+        // Suppress top-level text during writing phase — it's just Claude
+        // saying "Chapter 1 done, 9 more..." which the progress bar handles.
+        if (this.phase === 'writing' && !event.parentToolUseId) break;
         this.emit('text', event);
         break;
 
