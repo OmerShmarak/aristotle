@@ -173,20 +173,27 @@ For visuals, read skills/index.md and load any rendering skills relevant to this
 
 ### Visual Verification
 
-After writing a chapter, the sub-agent MUST verify all visuals rendered correctly by running:
+After writing a chapter, the sub-agent MUST verify all visuals by running both verifiers:
 
 ```bash
 node verifiers/verify-render.js [breakdown-dir]/ [chapter-file.md]
+node verifiers/verify-collisions.js [breakdown-dir]/ [chapter-file.md]
 ```
 
-This script wraps the single chapter markdown in a minimal HTML shell with CDN scripts, converts it via pandoc, loads it in headless Chromium, and checks every canvas and notation block for non-empty rendered content. It exits non-zero if any visual is blank. Each invocation is self-contained — safe to run in parallel across chapter agents.
+- **verify-render.js** — checks every canvas/notation block for non-empty rendered content. Exits non-zero if any visual is blank.
+- **verify-collisions.js** — checks that text labels don't overlap with drawings on canvas elements. Renders each chapter twice (once normally to record text bounding boxes, once with text disabled to isolate drawings), then detects drawn pixels underneath text regions. Exits non-zero if any collisions are found.
+
+Both scripts are self-contained — safe to run in parallel across chapter agents.
 
 Include this instruction in every chapter agent prompt:
 ```
 VISUAL VERIFICATION:
-After writing the chapter, verify all visuals render correctly:
+After writing the chapter, verify all visuals render correctly and have no overlaps:
   node verifiers/verify-render.js [breakdown-dir]/ chapters/[NN-slug].md
-If any visual reports EMPTY, fix the rendering code in your chapter and re-run until all pass.
+  node verifiers/verify-collisions.js [breakdown-dir]/ chapters/[NN-slug].md
+If verify-render reports EMPTY, fix the rendering code and re-run.
+If verify-collisions reports COLLISION, adjust the positions of the colliding text labels or drawings to add clearance, then re-run.
+Fix until both verifiers pass.
 ```
 
 

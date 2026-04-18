@@ -82,6 +82,7 @@ These just generate the files — you still need to transfer them yourself (USB,
 | `PROFILE.md` | Your background, learning style, preferences (gitignored) |
 | `build-book.sh` | Compiles chapters into `breakdown.html` (needs pandoc) |
 | `verifiers/verify-render.js` | Checks that diagrams actually rendered (needs puppeteer) |
+| `verifiers/verify-collisions.js` | Checks that text labels don't overlap drawings on canvases |
 | `export/html-to-kobo.js` | Converts `breakdown.html` to Kobo-compatible EPUB |
 | `export/html-to-kindle.js` | Converts `breakdown.html` to Kindle-compatible EPUB |
 | `skills/` | Rendering skill references for diagram agents |
