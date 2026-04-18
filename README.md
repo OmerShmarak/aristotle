@@ -65,10 +65,10 @@ Generate EPUB files from `book.html`:
 
 ```
 # Kobo (.kepub.epub)
-node ereaders/html-to-kobo.js machine-learning/book.html machine-learning.kepub.epub
+node export/html-to-kobo.js machine-learning/book.html machine-learning.kepub.epub
 
 # Kindle (.epub)
-node ereaders/html-to-kindle.js machine-learning/book.html machine-learning.epub
+node export/html-to-kindle.js machine-learning/book.html machine-learning.epub
 ```
 
 These just generate the files — you still need to transfer them yourself (USB, email to `@kindle.com`, Dropbox, etc.). Add `--verify` to the Kindle script to preview in a browser.
@@ -82,8 +82,8 @@ These just generate the files — you still need to transfer them yourself (USB,
 | `PROFILE.md` | Your background, learning style, preferences (gitignored) |
 | `build-book.sh` | Compiles chapters into `book.html` (needs pandoc) |
 | `verifiers/verify-render.js` | Checks that diagrams actually rendered (needs puppeteer) |
-| `ereaders/html-to-kobo.js` | Converts `book.html` to Kobo-compatible EPUB |
-| `ereaders/html-to-kindle.js` | Converts `book.html` to Kindle-compatible EPUB |
+| `export/html-to-kobo.js` | Converts `book.html` to Kobo-compatible EPUB |
+| `export/html-to-kindle.js` | Converts `book.html` to Kindle-compatible EPUB |
 | `skills/` | Rendering skill references for diagram agents |
 
 ## Requirements
