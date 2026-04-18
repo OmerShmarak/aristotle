@@ -71,7 +71,7 @@ for i in "${!CHAPTER_FILES[@]}"; do
 "
 
   # Convert markdown to HTML fragment via pandoc
-  BODY=$(pandoc --from=markdown --to=html5 --syntax-highlighting=none "$FILE")
+  BODY=$(pandoc --from=markdown+tex_math_dollars --to=html5 --mathjax --syntax-highlighting=none "$FILE")
 
   # Remove the first <h1> from body (we'll add it as the chapter header)
   BODY=$(echo "$BODY" | sed '0,/<h1[^>]*>.*<\/h1>/s///')
@@ -402,7 +402,9 @@ document.addEventListener("DOMContentLoaded", function() {
     renderMathInElement(document.body, {
       delimiters: [
         {left: "\$\$", right: "\$\$", display: true},
-        {left: "\\\\(", right: "\\\\)", display: false}
+        {left: "\\\\[", right: "\\\\]", display: true},
+        {left: "\\\\(", right: "\\\\)", display: false},
+        {left: "\$", right: "\$", display: false}
       ]
     });
   }
