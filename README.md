@@ -6,6 +6,7 @@ Learn everything.
 
 ```
 npm install
+cd cli && npm install && cd ..
 ```
 
 Install [pandoc](https://pandoc.org/installing.html):
@@ -23,17 +24,15 @@ sudo apt install pandoc
 Then:
 
 ```
-claude
+npx aristotle "quantum mechanics"
 ```
 
-Tell it what you want to learn. On first run it'll ask a few quick questions to understand how you learn, then save your profile for future breakdowns.
-
-It will ask you a few questions to figure out what you already know, build an outline, and — once you approve — write all chapters in parallel and compile the book.
+It'll ask a few quick questions to understand how you learn (first run only), diagnose what you already know, build an outline, and — once you approve — write all chapters in parallel and compile the book.
 
 ## What you get
 
 ```
-machine-learning/
+quantum-mechanics/
 ├── outline.md          # The plan (you approve this first)
 ├── chapters/
 │   ├── 01-what-is-learning.md
@@ -47,16 +46,17 @@ machine-learning/
 1. **Knowledge diagnosis** — binary-search style questions to find where your knowledge ends. No wasted chapters on stuff you already know.
 2. **Outline** — a dependency chain of chapters, sized to the gap between what you know and what you want to understand. Could be 5 chapters, could be 50.
 3. **Writing** — one agent per chapter, all in parallel. Each chapter: 2000-4000 words of prose (not bullet points), with inline diagrams.
-4. **Compile** — `./build-book.sh machine-learning/` produces `breakdown.html`.
+4. **Compile** — `./build-book.sh quantum-mechanics/` produces `breakdown.html`.
 5. **Refinement** (optional) — if you ask for it, a pass to clean up repetition, fix cross-chapter inconsistencies, kill robot-speak.
 
 ## Visuals
 
 Chapters can include hand-drawn diagrams (Rough.js), data charts (Chart.js), and sheet music (VexFlow). The rendering skills live in `skills/renderers/` — agents read these automatically when they need a visual.
 
-After writing, each chapter's visuals are verified with:
+After writing, each chapter's visuals are verified automatically:
 ```
-node verifiers/verify-render.js machine-learning/ chapters/01-what-is-learning.md
+node verifiers/verify-render.js quantum-mechanics/ chapters/01-wave-particle.md
+node verifiers/verify-collisions.js quantum-mechanics/ chapters/01-wave-particle.md
 ```
 
 ## Export to e-reader format
@@ -65,10 +65,10 @@ Generate EPUB files from `breakdown.html`:
 
 ```
 # Kobo (.kepub.epub)
-node export/html-to-kobo.js machine-learning/breakdown.html machine-learning.kepub.epub
+node export/html-to-kobo.js quantum-mechanics/breakdown.html quantum-mechanics.kepub.epub
 
 # Kindle (.epub)
-node export/html-to-kindle.js machine-learning/breakdown.html machine-learning.epub
+node export/html-to-kindle.js quantum-mechanics/breakdown.html quantum-mechanics.epub
 ```
 
 These just generate the files — you still need to transfer them yourself (USB, email to `@kindle.com`, Dropbox, etc.). Add `--verify` to the Kindle script to preview in a browser.
@@ -77,7 +77,8 @@ These just generate the files — you still need to transfer them yourself (USB,
 
 | File | What it does |
 |------|-------------|
-| `CLAUDE.md` | Entry point — tells Claude to read the breakdown prompt and your profile |
+| `cli/` | Interactive TUI — the main entry point |
+| `CLAUDE.md` | Agent instructions — tells Claude to read the breakdown prompt and your profile |
 | `BREAKDOWN.md` | The full prompt: how to diagnose, outline, write, refine, compile |
 | `PROFILE.md` | Your background, learning style, preferences (gitignored) |
 | `build-book.sh` | Compiles chapters into `breakdown.html` (needs pandoc) |
