@@ -49,7 +49,7 @@ Everything lives inside a folder named after your question (e.g. `how-does-a-pla
 | File | What it is |
 |------|-----------|
 | `outline.md` | The learning path — you approve this before writing starts |
-| `chapters/*.md` | The reading material as Markdown files, easy for LLMs to read and answer your questions |
+| `chapters/*.md` | Each chapter answers one question that gets you one step closer to understanding the thing you asked about. Markdown files, easy for LLMs to read and answer follow-up questions |
 | `breakdown.html` | The final product — all chapters compiled into a human-readable format, open in a browser |
 
 When Aristotle finishes, it exits and prints the command to open your breakdown:
