@@ -1,0 +1,8 @@
+{
+  "name": "aristotle",
+  "private": true,
+  "dependencies": {
+    "puppeteer": "^24.41.0",
+    "sharp": "^0.34.5"
+  }
+}
