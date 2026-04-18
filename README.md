@@ -48,7 +48,7 @@ Everything lives inside a folder named after your question (e.g. `how-does-a-pla
 
 | File | What it is |
 |------|-----------|
-| `outline.md` | The plan — you approve this before writing starts |
+| `outline.md` | The learning path — you approve this before writing starts |
 | `chapters/*.md` | The reading material as Markdown files, easy for LLMs to read and answer your questions |
 | `breakdown.html` | The final product — all chapters compiled into a human-readable format, open in a browser |
 
@@ -70,7 +70,7 @@ What happens when you run ```aristotle```?
 
 1. **Current knowledge diagnosis** — Aristotle will ask you questions about what you want to learn, to figure out what your knowledge is in this domain. It will start with medium questions, and depending on your answer, it will go easier or harder with you, binary search style. The goal is to rely on fundamentals you already know, and not assume you know stuff you don't.
 
-2. **Outline** — a dependency chain of chapters, sized to the gap between what you know and what you want to understand. Could be 5 chapters, could be 50.
+2. **Learning path** — a dependency chain of chapters, sized to the gap between what you know and what you want to understand. Could be 5 chapters, could be 50.
 
 3. **Writing** — one agent per chapter, all in parallel. Each chapter: 2000-4000 words of prose (not bullet points), with inline diagrams.
 
