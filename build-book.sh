@@ -75,9 +75,9 @@ for i in "${!CHAPTER_FILES[@]}"; do
 
   CHAPTERS_HTML="$CHAPTERS_HTML
 <section class=\"chapter\" id=\"${CHAPTER_ID}\">
-  <h1 class=\"chapter-title\">Chapter ${CHAPTER_NUM}: ${CHAPTER_TITLE}</h1>
+  <h1>Chapter ${CHAPTER_NUM}: ${CHAPTER_TITLE}</h1>
 ${BODY}
-  <div class=\"back-to-top\"><a href=\"#toc\">Back to contents</a></div>
+  <div class=\"back-to-top\"><a href=\"#toc\">&uarr; Contents</a></div>
 </section>
 "
   echo "  [$CHAPTER_NUM/$NUM_CHAPTERS] $CHAPTER_TITLE"
@@ -93,256 +93,303 @@ cat > "$OUTPUT" <<HTMLEOF
 <title>${TITLE}</title>
 ${CDN_SCRIPTS}
 <style>
-  /* === Base === */
-  *, *::before, *::after { box-sizing: border-box; }
-  body {
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 18px;
-    line-height: 1.68;
-    color: #2c2c2c;
-    background: #faf8f4;
-    margin: 0;
-    padding: 0;
-    -webkit-font-smoothing: antialiased;
-  }
-  .container {
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
+:root {
+  --bg: #faf8f4;
+  --text: #2c2c2c;
+  --muted: #6b6b6b;
+  --accent: #8b4513;
+  --border: #e0dcd4;
+  --code-bg: #f0ede6;
+  --blockquote-border: #c4a87c;
+}
 
-  /* === Title page === */
-  .title-page {
-    text-align: center;
-    padding: 4rem 0 3rem;
-    border-bottom: 2px solid #8b4513;
-    margin-bottom: 3rem;
-  }
-  .title-page h1 {
-    font-size: 2.2rem;
-    line-height: 1.3;
-    color: #2c2c2c;
-    margin: 0 0 0.5rem;
-  }
-  .title-page .subtitle {
-    font-size: 1.1rem;
-    color: #6b6b6b;
-    font-style: italic;
-    margin: 0;
-  }
+*, *::before, *::after { box-sizing: border-box; }
 
-  /* === Table of Contents === */
-  .toc {
-    margin-bottom: 3rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid #e0dcd4;
-  }
-  .toc h2 {
-    font-size: 1.4rem;
-    color: #8b4513;
-    margin: 0 0 1rem;
-  }
-  .toc ol {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  .toc li {
-    margin: 0.4rem 0;
-  }
-  .toc a {
-    color: #2c2c2c;
-    text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.2s;
-  }
-  .toc a:hover {
-    border-bottom-color: #8b4513;
-  }
-  .toc .num {
-    display: inline-block;
-    width: 2rem;
-    font-variant-numeric: tabular-nums;
-    color: #6b6b6b;
-  }
+html {
+  font-size: 18px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  /* === Chapters === */
-  .chapter {
-    padding-top: 2.5rem;
-    margin-top: 2.5rem;
-    border-top: 1px solid #e0dcd4;
-  }
-  .chapter:first-of-type {
-    border-top: none;
-    margin-top: 0;
-  }
-  .chapter-title {
-    font-size: 1.6rem;
-    line-height: 1.3;
-    margin: 0 0 1.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 3px solid #8b4513;
-  }
-  .chapter h2 {
-    font-size: 1.3rem;
-    margin: 2rem 0 0.8rem;
-    color: #2c2c2c;
-  }
-  .chapter h3 {
-    font-size: 1.1rem;
-    margin: 1.5rem 0 0.6rem;
-    color: #444;
-  }
-  .chapter p {
-    margin: 0 0 1rem;
-  }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.68;
+  color: var(--text);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+}
 
-  /* === Inline formatting === */
-  strong {
-    color: #8b4513;
-    font-weight: 700;
-  }
-  em {
-    font-style: italic;
-  }
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
 
-  /* === Lists === */
-  .chapter ul, .chapter ol {
-    margin: 0 0 1rem;
-    padding-left: 1.5rem;
-  }
-  .chapter li {
-    margin: 0.3rem 0;
-  }
+.title-page {
+  text-align: center;
+  padding: 6rem 0 4rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 3rem;
+}
 
-  /* === Code === */
-  code {
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 0.88em;
-    background: #f0ede6;
-    padding: 0.15em 0.35em;
-    border-radius: 3px;
-  }
-  pre {
-    background: #f0ede6;
-    padding: 1rem;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin: 0 0 1rem;
-  }
-  pre code {
-    background: none;
-    padding: 0;
-    font-size: 0.85em;
-  }
+.title-page h1 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
 
-  /* === Blockquotes === */
-  blockquote {
-    border-left: 3px solid #c4a87c;
-    margin: 0 0 1rem;
-    padding: 0.5rem 1rem;
-    font-style: italic;
-    color: #555;
-  }
-  blockquote p {
-    margin: 0;
-  }
+.title-page .subtitle {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 1.1rem;
+  margin-top: 1rem;
+}
 
-  /* === Tables === */
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0 0 1rem;
-    font-size: 0.95em;
-  }
-  th, td {
-    border: 1px solid #e0dcd4;
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-  }
-  th {
-    background: #f0ede6;
-    font-weight: 700;
-  }
+.toc {
+  margin-bottom: 3rem;
+  padding-bottom: 3rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  /* === Back to top === */
-  .back-to-top {
-    margin-top: 2rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e0dcd4;
-    font-size: 0.85rem;
-  }
-  .back-to-top a {
-    color: #6b6b6b;
-    text-decoration: none;
-  }
-  .back-to-top a:hover {
-    color: #8b4513;
-  }
+.toc h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 1.2rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
 
-  /* === Diagrams (Rough.js) === */
-  canvas {
-    display: block;
-    margin: 1.5rem auto;
-    background: #fff;
-    border-radius: 8px;
-    border: 1px solid #e0dcd4;
-  }
-  .drawing-title {
-    font-family: 'Comic Sans MS', 'Marker Felt', cursive, sans-serif;
-    text-align: center;
-    font-size: 0.95rem;
-    color: #6b6b6b;
-    margin-bottom: 0.5rem;
-  }
-  .caption {
-    text-align: center;
-    font-style: italic;
-    color: #6b6b6b;
-    font-size: 0.9rem;
-  }
+.toc ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 
-  /* === Links === */
-  a {
-    color: #8b4513;
-  }
+.toc li {
+  margin: 0.45rem 0;
+  line-height: 1.5;
+}
 
-  /* === Print === */
-  @media print {
-    body { background: #fff; }
-    .chapter { page-break-before: always; }
-    .chapter:first-of-type { page-break-before: avoid; }
-    a { color: inherit; text-decoration: none; }
-    .back-to-top { display: none; }
-  }
+.toc a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
 
-  /* === Mobile === */
-  @media (max-width: 720px) {
-    body { font-size: 16px; }
-    .container { padding: 1rem; }
-    .title-page { padding: 2rem 0 1.5rem; }
-    .title-page h1 { font-size: 1.6rem; }
-    .chapter-title { font-size: 1.3rem; }
-  }
+.toc a:hover {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.toc .num {
+  display: inline-block;
+  width: 2.2rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapter {
+  margin-top: 4rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--border);
+}
+
+.chapter:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 2.2rem;
+  margin-bottom: 0.8rem;
+}
+
+.chapter > h1:first-child {
+  font-size: 1.9rem;
+  color: var(--text);
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 2px solid var(--accent);
+}
+
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.15rem; }
+h4 { font-size: 1rem; font-style: italic; }
+
+p {
+  margin: 0 0 1.1rem;
+  hanging-punctuation: first;
+}
+
+a { color: var(--accent); }
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+ul, ol {
+  padding-left: 1.5rem;
+  margin: 0 0 1.1rem;
+}
+
+li { margin-bottom: 0.35rem; }
+li > ul, li > ol { margin-top: 0.3rem; margin-bottom: 0.3rem; }
+
+blockquote {
+  margin: 1.5rem 0;
+  padding: 0.8rem 1.2rem;
+  border-left: 3px solid var(--blockquote-border);
+  background: rgba(0,0,0,0.015);
+  color: var(--text);
+  font-style: italic;
+}
+
+blockquote p:last-child { margin-bottom: 0; }
+
+code {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1.2rem 1.4rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.82rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.92rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-weight: 700;
+  border-bottom: 2px solid var(--border);
+  font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2.5rem 0;
+}
+
+.drawing-inline {
+  margin: 2rem 0;
+  padding: 1rem 0;
+}
+
+.drawings-section {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed var(--border);
+}
+
+.drawing-title {
+  font-family: 'Comic Sans MS', cursive, sans-serif;
+  color: var(--accent);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.caption {
+  text-align: center;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+canvas {
+  display: block;
+  margin: 1rem auto 2rem;
+  max-width: 100%;
+}
+
+.back-to-top {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.back-to-top a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.back-to-top a:hover {
+  color: var(--accent);
+}
+
+@media print {
+  body { background: #fff; font-size: 11pt; }
+  .container { max-width: 100%; padding: 0; }
+  .title-page { padding: 2rem 0; }
+  .chapter { page-break-before: always; }
+  .chapter:first-of-type { page-break-before: avoid; }
+  .toc { page-break-after: always; }
+  a { color: inherit; text-decoration: none; }
+  pre { border: 1px solid #ccc; }
+  h1, h2, h3 { page-break-after: avoid; }
+  canvas { max-width: 100%; }
+  .back-to-top { display: none; }
+}
+
+@media (max-width: 720px) {
+  html { font-size: 16px; }
+  .container { padding: 2rem 1rem 4rem; }
+  .title-page { padding: 3rem 0 2rem; }
+  .title-page h1 { font-size: 2rem; }
+}
 </style>
 </head>
 <body>
 <div class="container">
 
-<!-- Title page -->
 <div class="title-page">
   <h1>${TITLE}</h1>
   <p class="subtitle">${SUBTITLE}</p>
 </div>
 
-<!-- Table of Contents -->
 <div class="toc" id="toc">
   <h2>Contents</h2>
   <ol>
 ${TOC_HTML}  </ol>
 </div>
 
-<!-- Chapters -->
 ${CHAPTERS_HTML}
 
 </div>

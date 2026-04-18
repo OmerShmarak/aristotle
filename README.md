@@ -20,13 +20,13 @@ choco install pandoc   # or: scoop install pandoc
 sudo apt install pandoc
 ```
 
-Edit `PROFILE.md` with your background, how you learn, and what you care about. Then:
+Then:
 
 ```
 claude
 ```
 
-Tell it what you want to learn. That's it.
+Tell it what you want to learn. On first run it'll ask a few quick questions to understand how you learn, then save your profile for future breakdowns.
 
 It will ask you a few questions to figure out what you already know, build an outline, and — once you approve — write all chapters in parallel and compile the book.
 
@@ -59,17 +59,19 @@ After writing, each chapter's visuals are verified with:
 node verifiers/verify-render.js machine-learning/ chapters/01-what-is-learning.md
 ```
 
-## Send to e-reader
+## Export to e-reader format
+
+Generate EPUB files from `book.html`:
 
 ```
-# Kobo
+# Kobo (.kepub.epub)
 node ereaders/html-to-kobo.js machine-learning/book.html machine-learning.kepub.epub
 
-# Kindle
+# Kindle (.epub)
 node ereaders/html-to-kindle.js machine-learning/book.html machine-learning.epub
 ```
 
-For Kindle, email the `.epub` to your `@kindle.com` address, or use [Send to Kindle](https://www.amazon.com/sendtokindle). Add `--verify` to open a browser preview before sending.
+These just generate the files — you still need to transfer them yourself (USB, email to `@kindle.com`, Dropbox, etc.). Add `--verify` to the Kindle script to preview in a browser.
 
 ## Files
 
