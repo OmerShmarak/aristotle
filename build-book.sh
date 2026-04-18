@@ -28,7 +28,10 @@ if [ ! -d "$CHAPTERS_DIR" ]; then
 fi
 
 # All renderer CDN scripts (included unconditionally — unused scripts are harmless)
-CDN_SCRIPTS='<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
+CDN_SCRIPTS='<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>'
 
@@ -393,6 +396,18 @@ ${TOC_HTML}  </ol>
 ${CHAPTERS_HTML}
 
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof renderMathInElement !== "undefined") {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: "\$\$", right: "\$\$", display: true},
+        {left: "\\\\(", right: "\\\\)", display: false}
+      ]
+    });
+  }
+});
+</script>
 </body>
 </html>
 HTMLEOF

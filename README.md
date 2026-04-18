@@ -6,7 +6,7 @@ Learn everything.
 
 ```
 npm install
-cd cli && npm install && cd ..
+cd cli && npm install && npm link && cd ..
 ```
 
 Install [pandoc](https://pandoc.org/installing.html):
@@ -24,7 +24,7 @@ sudo apt install pandoc
 Then:
 
 ```
-npx aristotle "quantum mechanics"
+aristotle "quantum mechanics"
 ```
 
 It'll ask a few quick questions to understand how you learn (first run only), diagnose what you already know, build an outline, and — once you approve — write all chapters in parallel and compile the book.
