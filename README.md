@@ -44,15 +44,13 @@ aristotle "How does a plane work?"
 
 ## What you get
 
-```
-how-does-a-plane-work/
-├── outline.md          # The plan (you approve this first)
-├── chapters/
-│   ├── 01-air-has-opinions.md
-│   ├── 02-how-wings-cheat-gravity.md
-│   └── ...
-└── breakdown.html           # The final product — open in a browser
-```
+Everything lives inside a folder named after your question (e.g. `how-does-a-plane-work/`):
+
+| File | What it is |
+|------|-----------|
+| `outline.md` | The plan — you approve this before writing starts |
+| `chapters/*.md` | The reading material as Markdown files, easy for LLMs to read and answer your questions |
+| `breakdown.html` | The final product — all chapters compiled into a human-readable format, open in a browser |
 
 When Aristotle finishes, it exits and prints the command to open your breakdown:
 ```
@@ -77,10 +75,6 @@ What happens when you run ```aristotle```?
 3. **Writing** — one agent per chapter, all in parallel. Each chapter: 2000-4000 words of prose (not bullet points), with inline diagrams.
 
 4. **Compile** — `./build-book.sh quantum-mechanics/` produces `breakdown.html`.
-
-5. **Refinement** (optional) — if you ask for it, a pass to clean up repetition, fix cross-chapter inconsistencies, kill robot-speak.
-
-
 
 
 
