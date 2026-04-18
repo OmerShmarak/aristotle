@@ -17,6 +17,8 @@ import { resolve } from 'path';
  *   'done'          { sessionId }
  *   'error'         { message }
  */
+const DONE_RE = /%%ARISTOTLE_DONE:(.+?)%%/;
+
 export class Engine extends EventEmitter {
   constructor(projectRoot) {
     super();
@@ -24,6 +26,8 @@ export class Engine extends EventEmitter {
     this.sessionId = null;
     this.systemPrompt = null;
     this.phase = 'idle';
+    this._isDone = false;
+    this._textBuffer = '';
   }
 
   async init() {
@@ -58,6 +62,15 @@ export class Engine extends EventEmitter {
       this.sessionId = sessionId;
       this._setPhase('idle');
       this.emit('turn_end');
+
+      // Check if the sentinel token appeared during this turn
+      const match = this._textBuffer.match(DONE_RE);
+      if (!this._isDone && match) {
+        this._isDone = true;
+        const artifactPath = resolve(this.projectRoot, match[1]);
+        this.emit('done', { artifactPath });
+      }
+      this._textBuffer = '';
     } catch (err) {
       this.emit('error', { message: err.message });
       this._setPhase('idle');
@@ -72,7 +85,19 @@ export class Engine extends EventEmitter {
         // Suppress top-level text during writing phase — it's just Claude
         // saying "Chapter 1 done, 9 more..." which the progress bar handles.
         if (this.phase === 'writing' && !event.parentToolUseId) break;
-        this.emit('text', event);
+
+        // Buffer top-level text to detect the sentinel token
+        if (!event.parentToolUseId) {
+          this._textBuffer += event.text;
+        }
+
+        // Strip sentinel token from displayed text
+        if (event.text.includes('%%ARISTOTLE_DONE')) {
+          const cleaned = event.text.replace(DONE_RE, '').trim();
+          if (cleaned) this.emit('text', { ...event, text: cleaned });
+        } else {
+          this.emit('text', event);
+        }
         break;
 
       case 'tool_start':
@@ -120,11 +145,6 @@ export class Engine extends EventEmitter {
       parts.push(readFileSync(breakdownPath, 'utf-8'));
     } else {
       throw new Error('BREAKDOWN.md not found!');
-    }
-
-    const claudePath = resolve(this.projectRoot, 'CLAUDE.md');
-    if (existsSync(claudePath)) {
-      parts.push('\n---\n\n# Student Profile Instructions\n\n' + readFileSync(claudePath, 'utf-8'));
     }
 
     const profilePath = resolve(this.projectRoot, 'PROFILE.md');

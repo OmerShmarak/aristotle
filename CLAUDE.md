@@ -1,33 +1,63 @@
-Read BREAKDOWN.md for your full instructions.
+# Aristotle
 
-## Student profile
+Interactive TUI that wraps Claude Code CLI to generate personalized textbooks from first principles.
 
-If `PROFILE.md` exists, read it before starting. If it doesn't exist, interview the student before the first breakdown. Keep it quick — prefer multiple-choice over open-ended questions. Cover:
+## Quick start
 
-1. **Background** — pick the closest:
-   - (a) No science/math background
-   - (b) Basic math and science
-   - (c) Technical (engineer, developer, etc.)
-   - (d) Domain expert in [field]
+```bash
+cd cli && npm install && npm link
+aristotle "quantum mechanics"
+```
 
-2. **How you learn best** — pick all that apply:
-   - (a) First-principles reasoning — need to know *why* before *what*
-   - (b) Examples and analogies first, theory after
-   - (c) Visual — diagrams and charts help a lot
-   - (d) Dense and fast — don't over-explain, trust me to keep up
-   - (e) Patient and thorough — I'd rather go slow than miss something
+Requires: Claude Code CLI (`claude`), pandoc, Node 20+.
 
-3. **Reading style**:
-   - (a) Long-form prose — I like reading
-   - (b) Shorter chunks with clear structure
-   - (c) Mix of both
+## Architecture
 
-4. **What annoys you?** (open-ended, one sentence is fine)
+```
+bin/aristotle.js  →  lib/engine.js  →  lib/claude.js
+                          ↕
+                      ui/App.js (Ink)
+```
 
-Save the answers to `PROFILE.md`. Follow the format of existing profiles if you've seen one — background, learning style, pet peeves, goals.
+Three layers, strict separation:
 
-If during any breakdown you learn something new about the student (e.g., they correct your approach, reveal expertise in an area, express a preference), update `PROFILE.md`.
+- **`cli/lib/claude.js`** — Pure stream-json parser. Spawns `claude -p`, translates raw events into normalized events. Knows nothing about Aristotle.
+- **`cli/lib/engine.js`** — Conversation loop. Manages session state (`--resume`), builds system prompt from `BREAKDOWN.md` + `PROFILE.md`, tracks phases (`planning` → `writing` → `idle`), detects the `%%ARISTOTLE_DONE:<path>%%` sentinel for auto-exit.
+- **`cli/ui/App.js`** — Ink TUI. Streaming text, spinner, progress bar, input. All rendering, no logic.
 
-## Running a breakdown
+Supporting files: `lib/tracker.js` (chapter progress counters), `lib/theme.js` (colors + ASCII art).
 
-When the user tells you what they want to learn, follow the process in BREAKDOWN.md — start with knowledge diagnosis, then build the breakdown.
+## Key constraint
+
+We wrap `claude -p` (one-shot per call) rather than the Claude API directly. Users authenticate via their Claude subscription — no API keys. Each turn is a separate process linked via `--resume <sessionId>`.
+
+## Content pipeline
+
+`BREAKDOWN.md` is the full prompt for the inner Claude agent. It controls diagnosis, outline generation, chapter writing (parallel agents), and compilation.
+
+`build-book.sh` compiles chapter markdown into a single `breakdown.html` via pandoc. Deterministic — no LLM involved.
+
+`skills/` contains rendering skill docs (Rough.js, Chart.js, VexFlow) that chapter agents load on demand.
+
+`verifiers/` contains headless-browser scripts that validate visual rendering and text/drawing collisions.
+
+## Completion flow
+
+After `build-book.sh` runs, the inner Claude outputs `%%ARISTOTLE_DONE:<path>%%`. The engine strips this from display, emits a `done` event with the resolved artifact path, and the TUI shows the `open` command then exits.
+
+## File layout
+
+```
+BREAKDOWN.md          # Inner agent prompt (the product)
+PROFILE.md            # Student profile (created on first run)
+build-book.sh         # Markdown → HTML compiler
+skills/               # Rendering skill docs for chapter agents
+verifiers/            # Visual verification scripts
+cli/
+  bin/aristotle.js    # Entry point
+  lib/claude.js       # Stream-json parser
+  lib/engine.js       # Conversation loop + session mgmt
+  lib/tracker.js      # Chapter progress tracking
+  lib/theme.js        # Colors, ASCII art
+  ui/App.js           # Ink TUI components
+```

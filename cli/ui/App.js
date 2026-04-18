@@ -80,6 +80,7 @@ export function App({ engine, banner, topic }) {
   const [tracker] = useState(() => new ChapterTracker());
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [started, setStarted] = useState(false);
+  const [completed, setCompleted] = useState(null); // null | { artifactPath }
   const smoother = useStreamingText();
 
   // Wire engine events to React state
@@ -109,6 +110,9 @@ export function App({ engine, banner, topic }) {
     const onError = (ev) => {
       setMessages(msgs => [...msgs, { id: Date.now(), role: 'error', text: ev.message }]);
     };
+    const onDone = (ev) => {
+      setCompleted(ev);
+    };
 
     engine.on('text', onText);
     engine.on('phase', onPhase);
@@ -117,6 +121,7 @@ export function App({ engine, banner, topic }) {
     engine.on('task_completed', onTaskCompleted);
     engine.on('turn_end', onTurnEnd);
     engine.on('error', onError);
+    engine.on('done', onDone);
     return () => {
       engine.off('text', onText);
       engine.off('phase', onPhase);
@@ -125,6 +130,7 @@ export function App({ engine, banner, topic }) {
       engine.off('task_completed', onTaskCompleted);
       engine.off('turn_end', onTurnEnd);
       engine.off('error', onError);
+      engine.off('done', onDone);
     };
   }, [engine, tracker]);
 
@@ -145,12 +151,22 @@ export function App({ engine, banner, topic }) {
     engine.send(text);
   }, [phase, engine]);
 
+  // Auto-exit after breakdown is complete
+  useEffect(() => {
+    if (!completed) return;
+    const t = setTimeout(() => {
+      exit();
+      process.exit(0);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [completed, exit]);
+
   // Ctrl+C to exit
   useInput((ch, key) => {
     if (key.ctrl && ch === 'c') exit();
   });
 
-  const isIdle = phase === 'idle' && started;
+  const isIdle = phase === 'idle' && started && !completed;
   const isWorking = phase === 'planning' || phase === 'writing';
 
   return e(Box, { flexDirection: 'column' },
@@ -161,7 +177,7 @@ export function App({ engine, banner, topic }) {
           return e(Box, { key: 'banner', flexDirection: 'column' },
             e(Text, { color: '#C4A87C' }, banner),
             e(Text, { bold: true, color: '#8B4513' }, '  A R I S T O T L E'),
-            e(Text, { color: '#8B8178' }, '  Learn everything.\n'),
+            e(Text, { color: '#8B8178' }, '  Understand everything.\n'),
             e(Text, { color: '#DDD5C7' }, '  Topic: ', e(Text, { color: '#D2691E' }, topic), '\n'),
             e(Text, { color: '#6B6358' }, '  ' + '─'.repeat(50) + '\n'),
           );
@@ -192,6 +208,15 @@ export function App({ engine, banner, topic }) {
       // Progress bar with spinner (writing phase)
       progress.total > 0 ? e(Box, { paddingLeft: 2, marginTop: 1 },
         e(ProgressBar, { done: progress.done, total: progress.total }),
+      ) : null,
+
+      // Completion banner
+      completed ? e(Box, { flexDirection: 'column', paddingLeft: 2, marginTop: 1 },
+        e(Text, { color: '#6B6358' }, '─'.repeat(50)),
+        e(Text, { color: '#C4A87C', bold: true }, '\n  Your breakdown is ready!\n'),
+        e(Text, { color: '#8B8178' }, '  Open it in your browser:\n'),
+        e(Text, { color: '#D2691E', bold: true }, `    open ${completed.artifactPath}\n`),
+        e(Text, { color: '#6B6358' }, '─'.repeat(50)),
       ) : null,
 
       // Input bar
