@@ -13,13 +13,12 @@ import { appendFileSync } from 'fs';
  *   { type: 'init', sessionId, model, tools, version }
  *   { type: 'text', text, parentToolUseId }
  *   { type: 'tool_start', toolName, toolUseId, parentToolUseId }
- *   { type: 'tool_input', toolUseId, partialJson, parentToolUseId }
  *   { type: 'turn_end', stopReason, parentToolUseId, content }
  *       content: [{ type: 'text', text } | { type: 'tool_use', id, name, input }]
  *   { type: 'task_started', taskId, toolUseId, description, prompt }
  *   { type: 'retry', attempt, maxRetries, delayMs, error }
  *   { type: 'compact', trigger }
- *   { type: 'result', ok, sessionId, result, cost, turns, durationMs }
+ *   { type: 'result', ok, sessionId, result, cost, turns, durationMs, permissionDenials }
  *   { type: 'error', message }
  */
 export function runClaude(prompt, opts = {}) {
@@ -27,7 +26,7 @@ export function runClaude(prompt, opts = {}) {
     '-p', prompt,
     '--output-format', 'stream-json',
     '--verbose',
-    '--dangerously-skip-permissions',
+    '--permission-mode', opts.permissionMode || 'auto',
     '--include-partial-messages',
   ];
 
@@ -137,6 +136,7 @@ export function translate(raw) {
         turns: raw.num_turns ?? 0,
         durationMs: raw.duration_ms ?? 0,
         subtype: raw.subtype,
+        permissionDenials: raw.permission_denials || [],
       }];
 
     // user (tool results), rate_limit_event, etc. — not needed by features

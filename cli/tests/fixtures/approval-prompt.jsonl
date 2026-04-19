@@ -1,0 +1,5 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "question", "payload": {"header": "Bash approval", "question": "May I run a Bash command?", "multiSelect": false, "options": [{"label": "Yes, proceed", "description": "Approve running a Bash command."}, {"label": "No", "description": "Deny running a Bash command."}]}}
+{"delayMs": 50, "event": "phase", "payload": {"phase": "idle"}}
+{"delayMs": 5000, "event": "__exit", "payload": {"code": 0}}

@@ -36,6 +36,12 @@ export class MockEngine extends EventEmitter {
     this._replay();
   }
 
+  probeApproval() {
+    if (this._started) return;
+    this._started = true;
+    this._replay();
+  }
+
   async _replay() {
     for (const step of this._script) {
       if (step.delayMs > 0) await new Promise(r => setTimeout(r, step.delayMs));

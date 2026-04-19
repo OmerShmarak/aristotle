@@ -13,6 +13,8 @@ import { resolve } from 'path';
  *   'chapter_done'   { id }              — from %%ARISTOTLE_CHAPTER_DONE:<id>%%
  *   'phase'          { phase }           — 'planning' | 'writing' | 'idle'
  *   'status'         { message }         — status line text
+ *   'question'       { question, options, header, multiSelect } — pending AskUserQuestion
+ *   'question_cleared' { }
  *   'turn_start'     { }                 — new user send begins
  *   'turn_end'       { }                 — Claude finished responding
  *   'done'           { artifactPath }    — from %%ARISTOTLE_DONE:<path>%%
@@ -26,6 +28,8 @@ const DONE_RE = /^%%ARISTOTLE_DONE:(.+?)%%$/;
 // Max length of a pending partial sentinel we'll buffer before giving up and
 // emitting as plain text. Keeps `%` in ordinary prose from stalling output.
 const MAX_PARTIAL_LEN = 120;
+const PROBE_APPROVAL_PROMPT =
+  'Before doing anything else, ask me for approval to run the Bash command `pwd` by using your AskUserQuestion mechanism. After I answer, if approved, run `pwd` and report the working directory in one sentence.';
 
 export class Engine extends EventEmitter {
   /**
@@ -44,6 +48,9 @@ export class Engine extends EventEmitter {
     this._isDone = false;
     this._streamBuffer = '';
     this._donePath = null;
+    this._pendingQuestion = null;
+    this._probeActive = false;
+    this._savedSessionId = null;
     this._claudeLog = sessionDir ? resolve(sessionDir, 'claude.jsonl') : null;
     this._engineLog = sessionDir ? resolve(sessionDir, 'engine.jsonl') : null;
     if (this._engineLog) writeFileSync(this._engineLog, '');
@@ -86,11 +93,16 @@ export class Engine extends EventEmitter {
     this._setPhase('planning');
     this._streamBuffer = '';
     this._donePath = null;
+    if (this._pendingQuestion) {
+      this._pendingQuestion = null;
+      this.emit('question_cleared');
+    }
     this.emit('turn_start');
 
     const opts = {
       cwd: this.breakdownDir,
       onEvent: (event) => this._handleEvent(event),
+      permissionMode: 'auto',
       // Re-inject on every turn. Claude Code's `--resume` does NOT preserve
       // `--append-system-prompt` from the original invocation — verified
       // empirically: a pirate-persona system prompt on turn 1 was gone on
@@ -98,8 +110,11 @@ export class Engine extends EventEmitter {
       // with no BREAKDOWN.md, no operating-environment briefing, no
       // absolute paths to aristotle's source — the model falls back to
       // default "helpful assistant" behavior mid-pipeline.
-      appendSystemPrompt: this.systemPrompt,
     };
+
+    if (!this._probeActive) {
+      opts.appendSystemPrompt = this.systemPrompt;
+    }
 
     if (this._claudeLog) {
       opts.eventLog = this._claudeLog;
@@ -119,6 +134,10 @@ export class Engine extends EventEmitter {
       this._setPhase('idle');
       this.emit('turn_end');
 
+      if (this._probeActive && !this._pendingQuestion) {
+        this._finishProbe();
+      }
+
       if (!this._isDone && this._donePath) {
         this._isDone = true;
         const artifactPath = resolve(this.breakdownDir, this._donePath);
@@ -128,7 +147,19 @@ export class Engine extends EventEmitter {
       this.emit('error', { message: err.message });
       this._setPhase('idle');
       this.emit('turn_end');
+      if (this._probeActive && !this._pendingQuestion) {
+        this._finishProbe();
+      }
     }
+  }
+
+  async probeApproval() {
+    if (this._probeActive) return;
+    this._savedSessionId = this.sessionId;
+    this.sessionId = null;
+    this._probeActive = true;
+    this.emit('status', { message: 'Starting approval probe...' });
+    return this.send(PROBE_APPROVAL_PROMPT);
   }
 
   _handleEvent(event) {
@@ -163,11 +194,33 @@ export class Engine extends EventEmitter {
         break;
 
       case 'result':
+        this._handlePermissionDenials(event.permissionDenials || []);
         if (!event.ok) {
           this.emit('error', { message: `Error: ${event.subtype || 'unknown'}` });
         }
         break;
     }
+  }
+
+  _handlePermissionDenials(permissionDenials) {
+    for (const denial of permissionDenials) {
+      if (denial.tool_name !== 'AskUserQuestion') continue;
+      const question = denial.tool_input?.questions?.[0];
+      if (!question) continue;
+      this._pendingQuestion = {
+        question: question.question || '',
+        header: question.header || 'Approval',
+        multiSelect: Boolean(question.multiSelect),
+        options: Array.isArray(question.options) ? question.options : [],
+      };
+      this.emit('question', this._pendingQuestion);
+    }
+  }
+
+  _finishProbe() {
+    this._probeActive = false;
+    this.sessionId = this._savedSessionId;
+    this._savedSessionId = null;
   }
 
   /**
@@ -325,6 +378,17 @@ Never put these in explanations to the student. Never put them inside code fence
 ## Your actual job
 
 Take a student, figure out where they start knowledge-wise, design a chapter dependency chain that gets them to the destination, spawn Agent sub-agents to write each chapter's markdown file, compile to HTML, exit. You are a **coordinator who delegates writing to sub-agents**, not a conversational teacher. Every character of subject-matter content belongs in a chapter file, not in this chat.
+
+## Developer approval probe
+
+Aristotle has a hidden developer/testing path for verifying the TUI's approval handling. If the user explicitly asks to run the approval probe, mentions \`/probe-approval\`, or says they are testing whether approval prompts work in the TUI, this overrides the normal book-building flow for that turn.
+
+In that case, cooperate with the test:
+- Immediately use \`AskUserQuestion\` to ask whether you may run the Bash command \`pwd\`.
+- Keep the question short and explicit.
+- If the user approves, run \`pwd\` and report the working directory in one sentence.
+- If the user declines, say briefly that you did not run it.
+- Do NOT redirect into diagnosis, outline-building, or chapter planning for this testing path.
 
 ## Parallel spawning — non-negotiable
 

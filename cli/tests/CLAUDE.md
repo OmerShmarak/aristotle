@@ -147,6 +147,49 @@ grid.
    - `terminal.keyPress("c", { ctrl: true })` — modified keys.
 4. Run `npm run tui-test`.
 
+## Approval probe
+
+There are now two distinct ways to verify Aristotle's approval-handling path.
+
+### 1. Fast TUI coverage with the mock engine
+
+Use the scripted fixture path to verify that the UI renders approval prompts
+and that the `/probe-approval` command routes into the probe flow:
+
+- `tests/approval-prompt.test.ts` checks prompt rendering from a scripted
+  `question` event.
+- `tests/probe-command.test.ts` starts the app with
+  `ARISTOTLE_SKIP_INITIAL_SEND=1`, submits `/probe-approval`, and verifies the
+  app transitions into the approval-probe transcript path.
+
+These tests are intentionally UI-only; they do not talk to Claude.
+
+### 2. Real Claude end-to-end verification
+
+To prove that Aristotle is not faking the prompt and is actually parsing
+Claude's headless approval flow:
+
+```bash
+ARISTOTLE_AUTO_PROBE=1 PATH="/Users/omers/.local/bin:$PATH" node cli/bin/aristotle.js "probe real"
+```
+
+This starts the real TUI and immediately runs `engine.probeApproval()` instead
+of the normal book flow. The proof lives in the session logs under
+`~/.aristotle/sessions/<session-id>/`:
+
+- `claude.jsonl` must contain a real `AskUserQuestion` tool use plus a final
+  `result.permission_denials` entry for `AskUserQuestion`.
+- `engine.jsonl` must contain:
+  - `status: Starting approval probe...`
+  - `tool_start` with `toolName: "AskUserQuestion"`
+  - `question` with the parsed prompt/options payload
+
+That combination proves all three layers:
+- Claude actually emitted `AskUserQuestion`
+- Aristotle actually parsed the headless response
+- The TUI received a first-class `question` event rather than rendering a fake
+  hardcoded prompt
+
 Patterns that work well:
 - Prove a *change* over time by looking for a state that can only exist after
   an animation tick (e.g. a specific spinner frame: `/⠙/g`).

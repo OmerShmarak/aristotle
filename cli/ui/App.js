@@ -77,11 +77,31 @@ export function App({ engine, banner, topic, sessionId }) {
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState('idle');
   const [status, setStatus] = useState('');
+  const [question, setQuestion] = useState(null);
   const [tracker] = useState(() => new ChapterTracker());
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [started, setStarted] = useState(false);
   const [completed, setCompleted] = useState(null); // null | { artifactPath }
   const smoother = useStreamingText();
+  const submitLockRef = useRef(false);
+  const inputRef = useRef('');
+
+  const runProbeCommand = useCallback(() => {
+    setInput('');
+    inputRef.current = '';
+    setMessages(msgs => {
+      const baseId = Date.now();
+      return [...msgs,
+        { id: baseId, role: 'user', text: '/probe-approval' },
+        { id: baseId + 1, role: 'assistant', text: 'Running approval probe in an isolated Claude session.' },
+      ];
+    });
+    engine.probeApproval();
+  }, [engine]);
+
+  const isProbeCommand = useCallback((value) => {
+    return value.trim() === '/probe-approval';
+  }, []);
 
   // Wire engine events to React state
   useEffect(() => {
@@ -92,6 +112,20 @@ export function App({ engine, banner, topic, sessionId }) {
     };
     const onPhase = (ev) => setPhase(ev.phase);
     const onStatus = (ev) => setStatus(ev.message);
+    const onQuestion = (ev) => {
+      setQuestion(ev);
+      const lines = [
+        ev.header || 'Approval',
+        ev.question || '',
+        ...(ev.options || []).map((opt, i) => `${i + 1}. ${opt.label} — ${opt.description}`),
+      ].filter(Boolean);
+      setMessages(msgs => [...msgs, {
+        id: Date.now(),
+        role: 'assistant',
+        text: lines.join('\n'),
+      }]);
+    };
+    const onQuestionCleared = () => setQuestion(null);
     const onTurnStart = () => {
       tracker.reset();
       setProgress({ done: 0, total: 0 });
@@ -121,6 +155,8 @@ export function App({ engine, banner, topic, sessionId }) {
     engine.on('text', onText);
     engine.on('phase', onPhase);
     engine.on('status', onStatus);
+    engine.on('question', onQuestion);
+    engine.on('question_cleared', onQuestionCleared);
     engine.on('turn_start', onTurnStart);
     engine.on('chapters_total', onChaptersTotal);
     engine.on('chapter_done', onChapterDone);
@@ -131,6 +167,8 @@ export function App({ engine, banner, topic, sessionId }) {
       engine.off('text', onText);
       engine.off('phase', onPhase);
       engine.off('status', onStatus);
+      engine.off('question', onQuestion);
+      engine.off('question_cleared', onQuestionCleared);
       engine.off('turn_start', onTurnStart);
       engine.off('chapters_total', onChaptersTotal);
       engine.off('chapter_done', onChapterDone);
@@ -144,18 +182,45 @@ export function App({ engine, banner, topic, sessionId }) {
   useEffect(() => {
     if (!started) {
       setStarted(true);
+      if (process.env.ARISTOTLE_AUTO_PROBE === '1') {
+        engine.probeApproval();
+        return;
+      }
+      if (process.env.ARISTOTLE_SKIP_INITIAL_SEND === '1') return;
       engine.send(`I want to learn about: ${topic}`);
     }
   }, [started, engine, topic]);
 
-  // Handle user submit
-  const handleSubmit = useCallback((value) => {
-    if (!value.trim() || phase !== 'idle') return;
-    const text = value.trim();
+  const submitValue = useCallback((value) => {
+    if (!value.trim() || phase !== 'idle' || submitLockRef.current) return;
+    submitLockRef.current = true;
+    const raw = value.trim();
+    if (isProbeCommand(raw)) {
+      runProbeCommand();
+      queueMicrotask(() => { submitLockRef.current = false; });
+      return;
+    }
+
+    const text = normalizeAnswer(raw, question);
     setInput('');
     setMessages(msgs => [...msgs, { id: Date.now(), role: 'user', text }]);
+    if (question) setQuestion(null);
     engine.send(text);
-  }, [phase, engine]);
+    queueMicrotask(() => { submitLockRef.current = false; });
+  }, [phase, engine, isProbeCommand, question, runProbeCommand]);
+
+  // Handle user submit
+  const handleSubmit = useCallback((value) => {
+    submitValue(value);
+  }, [submitValue]);
+
+  const handleInputChange = useCallback((value) => {
+    inputRef.current = value;
+    setInput(value);
+    if (phase === 'idle' && isProbeCommand(value) && !submitLockRef.current) {
+      queueMicrotask(() => submitValue(value));
+    }
+  }, [isProbeCommand, phase, submitValue]);
 
   // Auto-exit after breakdown is complete
   useEffect(() => {
@@ -170,6 +235,9 @@ export function App({ engine, banner, topic, sessionId }) {
   // Ctrl+C to exit
   useInput((ch, key) => {
     if (key.ctrl && ch === 'c') exit();
+    if (key.return && phase === 'idle') {
+      submitValue(inputRef.current);
+    }
   });
 
   const isIdle = phase === 'idle' && started && !completed;
@@ -244,12 +312,38 @@ export function App({ engine, banner, topic, sessionId }) {
         e(Text, { color: '#D2691E' }, '> '),
         e(TextInput, {
           value: input,
-          onChange: setInput,
+          onChange: handleInputChange,
           onSubmit: handleSubmit,
+          placeholder: question ? answerPlaceholder(question) : '',
           focus: true,
           showCursor: true,
         }),
       ) : null,
     ),
   );
+}
+
+function normalizeAnswer(value, question) {
+  if (!question) return value;
+
+  const byIndex = Number(value);
+  if (Number.isInteger(byIndex) && byIndex >= 1 && byIndex <= question.options.length) {
+    return question.options[byIndex - 1].label;
+  }
+
+  const lower = value.toLowerCase();
+  const exact = question.options.find(opt => opt.label.toLowerCase() === lower);
+  if (exact) return exact.label;
+
+  if (question.options.length === 2) {
+    if (lower === 'y' || lower === 'yes') return question.options[0].label;
+    if (lower === 'n' || lower === 'no') return question.options[1].label;
+  }
+
+  return value;
+}
+
+function answerPlaceholder(question) {
+  if (!question?.options?.length) return '';
+  return `Reply with ${question.options.map((opt, i) => `${i + 1}:${opt.label}`).join(' or ')}`;
 }
