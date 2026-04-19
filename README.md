@@ -44,7 +44,7 @@ aristotle "How does a plane work?"
 
 ## What you get
 
-Everything lives inside a folder named after your question (e.g. `how-does-a-plane-work/`):
+Everything lives inside `artifacts/<slug>/`, where `<slug>` is derived from your question (e.g. `artifacts/how-does-a-plane-work/`):
 
 | File | What it is |
 |------|-----------|
@@ -54,7 +54,7 @@ Everything lives inside a folder named after your question (e.g. `how-does-a-pla
 
 When Aristotle finishes, it exits and prints the command to open your breakdown:
 ```
-open how-does-a-plane-work/breakdown.html
+open artifacts/how-does-a-plane-work/breakdown.html
 ```
 
 ## Design principles
