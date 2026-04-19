@@ -1,0 +1,13 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 60, "event": "text", "payload": {"text": "Aristotle is "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "streaming this "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "sentence in "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "small chunks "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "so we can "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "measure visible "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "screen update "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "cadence rather "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "than raw PTY "}}
+{"delayMs": 90, "event": "text", "payload": {"text": "bytes alone."}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}
