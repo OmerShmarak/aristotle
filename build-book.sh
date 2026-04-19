@@ -29,11 +29,13 @@ fi
 
 # All renderer CDN scripts (included unconditionally — unused scripts are harmless)
 CDN_SCRIPTS='<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>'
+<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css">
+<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js"></script>'
 
 # Extract title from outline H1 if available, else use directory name
 if [ -f "$OUTLINE" ]; then
@@ -341,6 +343,23 @@ canvas {
   margin: 1rem auto 2rem;
   max-width: 100%;
 }
+
+/* JSXGraph polish: strip the library defaults that fight the book aesthetic. */
+.jxgbox {
+  border: none !important;
+  background: transparent !important;
+  margin: 1.5rem auto 2rem;
+  box-shadow: none !important;
+}
+.jxgbox svg { overflow: visible; }
+.JXGtext {
+  outline: none !important;              /* kill the tabindex focus ring */
+  font-family: Georgia, 'Times New Roman', serif !important;
+  letter-spacing: 0.005em;
+}
+/* Point labels: match book body serif as well. */
+.jxgbox text { font-family: Georgia, 'Times New Roman', serif; }
+.diagram-block { margin: 2rem 0; }
 
 .back-to-top {
   margin-top: 2.5rem;

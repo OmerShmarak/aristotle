@@ -249,28 +249,52 @@ For visuals, read {{PROJECT_ROOT}}/skills/index.md and load any rendering skills
 
 ### Visual Verification
 
-After writing a chapter, the sub-agent MUST verify all visuals by running both verifiers:
+After writing a chapter, the sub-agent MUST run all four verifiers. The first three are pass/fail gates; the fourth produces PNG previews for visual QA. Each no-ops cleanly when the chapter doesn't contain the relevant markup, so running all four unconditionally is the simplest policy:
 
 ```bash
-node {{PROJECT_ROOT}}/verifiers/verify-render.js . chapters/[chapter-file.md]
-node {{PROJECT_ROOT}}/verifiers/verify-collisions.js . chapters/[chapter-file.md]
+node {{PROJECT_ROOT}}/verifiers/verify-render.js          . chapters/[chapter-file.md]
+node {{PROJECT_ROOT}}/verifiers/verify-collisions.js      . chapters/[chapter-file.md]
+node {{PROJECT_ROOT}}/verifiers/verify-svg-collisions.js  . chapters/[chapter-file.md]
+node {{PROJECT_ROOT}}/verifiers/screenshot-boards.js      . chapters/[chapter-file.md]
 ```
 
-- **verify-render.js** — checks every canvas/notation block for non-empty rendered content. Exits non-zero if any visual is blank.
-- **verify-collisions.js** — checks that text labels don't overlap with drawings on canvas elements. Renders each chapter twice (once normally to record text bounding boxes, once with text disabled to isolate drawings), then detects drawn pixels underneath text regions. Exits non-zero if any collisions are found.
+- **verify-render.js** — checks every canvas/SVG/notation block for non-empty rendered content. Exits non-zero if any visual is blank. Renderer-agnostic.
+- **verify-collisions.js** — canvas-only. Checks that text labels don't overlap drawings on `<canvas>` elements (Rough.js / Chart.js / VexFlow). Renders each chapter twice (once normally to record text bounding boxes, once with text disabled to isolate drawings), then detects drawn pixels underneath text regions. No-ops when the chapter has no canvases.
+- **verify-svg-collisions.js** — SVG-only. Checks that text labels don't overlap drawings on `.jxgbox` boards (JSXGraph). Uses DOM `getBoundingClientRect` on SVG primitives and KaTeX overlay rects, flags any text whose area overlaps a drawing primitive by more than 20%. No-ops when the chapter has no JSXGraph boards.
+- **screenshot-boards.js** — JSXGraph-only. Writes one PNG per `.jxgbox` board into `_board-previews/` inside the breakdown directory, for *visual* QA. Passing the collision verifier is a floor, not a ceiling — label placement and aesthetic issues only show up by eye. Always exits 0. No-ops when the chapter has no JSXGraph boards.
 
-Both scripts are self-contained — safe to run in parallel across chapter agents.
+All four scripts are self-contained — safe to run in parallel across chapter agents.
 
 Include this instruction in every chapter agent prompt:
 ```
 VISUAL VERIFICATION:
 After writing the chapter, verify all visuals render correctly and have no overlaps:
-  node {{PROJECT_ROOT}}/verifiers/verify-render.js . chapters/[NN-slug].md
-  node {{PROJECT_ROOT}}/verifiers/verify-collisions.js . chapters/[NN-slug].md
+  node {{PROJECT_ROOT}}/verifiers/verify-render.js         . chapters/[NN-slug].md
+  node {{PROJECT_ROOT}}/verifiers/verify-collisions.js     . chapters/[NN-slug].md
+  node {{PROJECT_ROOT}}/verifiers/verify-svg-collisions.js . chapters/[NN-slug].md
+  node {{PROJECT_ROOT}}/verifiers/screenshot-boards.js     . chapters/[NN-slug].md
 If verify-render reports EMPTY, fix the rendering code and re-run.
-If verify-collisions reports COLLISION, adjust the positions of the colliding text labels or drawings to add clearance, then re-run.
-Fix until both verifiers pass.
+If verify-collisions or verify-svg-collisions reports COLLISION, adjust the positions of
+the colliding text labels or drawings to add clearance, then re-run.
+Fix until all three pass-fail verifiers pass.
+
+Then open the PNGs in _board-previews/ and check against the "Common Pitfalls" section of
+skills/renderers/mathematical-geometry.md. Pass/fail tests don't catch labels floating at
+arrow tips, labels on the wrong side of a figure, or other purely-aesthetic mistakes — you
+have to look. Fix anything that wouldn't pass muster as a published textbook illustration.
 ```
+
+### Picking a renderer (quick decision key)
+
+When a chapter warrants a visual, match the content to the renderer before opening the skill doc:
+
+- **Orthogonal projections, angles between vectors, covariance ellipses, parametric / function curves, any construction where the coordinates are computed rather than eyeballed** → `skills/renderers/mathematical-geometry.md` (JSXGraph, SVG, KaTeX labels).
+- **Feedback loops, process flows, causal chains, conceptual boxes-and-arrows, hand-drawn warmth** → `skills/renderers/conceptual-diagrams.md` (Rough.js).
+- **Linear dependency chains (A → B → C → D)** → `skills/renderers/flow-chains.md` (Rough.js).
+- **Tabular / statistical data: bars, lines, scatter, distributions** → `skills/renderers/charts-and-graphs.md` (Chart.js).
+- **Sheet music: notes, chords, staves** → `skills/renderers/music-notation.md` (VexFlow).
+
+Rule of thumb: if you'd otherwise type `Math.cos(...)` or project-a-point-onto-a-line code by hand, that's JSXGraph territory. If you'd be happy with approximate coordinates and sketchy strokes, it's Rough.js.
 
 
 ---
@@ -344,7 +368,7 @@ Your working directory IS the breakdown folder — the aristotle engine created 
 └── README.md                # Overview & reading order
 ```
 
-All renderer CDN scripts (Rough.js, Chart.js, VexFlow) are hardcoded in `{{PROJECT_ROOT}}/build-book.sh` and `{{PROJECT_ROOT}}/verifiers/verify-render.js` — no per-breakdown configuration needed.
+All renderer CDN scripts (KaTeX, Rough.js, Chart.js, VexFlow, JSXGraph) are hardcoded in `{{PROJECT_ROOT}}/build-book.sh` and mirrored in the three `{{PROJECT_ROOT}}/verifiers/*.js` files — no per-breakdown configuration needed. When adding a new renderer, update all four `buildCdnTags`/`CDN_SCRIPTS` blocks together.
 
 ---
 
