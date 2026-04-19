@@ -1,0 +1,6 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "writing"}}
+{"delayMs": 50, "event": "chapters_total", "payload": {"total": 22}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Dispatching 22 chapter agents in parallel. "}}
+{"delayMs": 100, "event": "text", "payload": {"text": "Each will write one chapter."}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}

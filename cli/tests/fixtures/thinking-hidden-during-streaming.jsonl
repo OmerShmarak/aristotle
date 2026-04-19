@@ -1,0 +1,5 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Here is the plan for the single chapter. "}}
+{"delayMs": 100, "event": "text", "payload": {"text": "The arc will cover five steps."}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}

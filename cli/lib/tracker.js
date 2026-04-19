@@ -1,47 +1,46 @@
 /**
  * Chapter progress tracker.
- * Pure data — no stdout writes. The UI reads .spawnedCount / .completedCount.
+ * Pure data — no stdout writes. The UI reads .totalCount / .completedCount.
+ *
+ * Driven by sentinel tokens emitted by the outer Claude agent:
+ *   %%ARISTOTLE_CHAPTERS_TOTAL:N%%          sets total
+ *   %%ARISTOTLE_CHAPTER_DONE:<chapter-id>%% marks one chapter finalized
+ *
+ * This decouples progress from the underlying task/Agent tool events, so the
+ * outer agent is free to spawn arbitrary sub-agents per chapter (write, refine,
+ * verify) without inflating the bar — it only reports "done" when a chapter
+ * is truly final.
  */
 export class ChapterTracker {
   constructor() {
-    this.spawned = new Map();    // toolUseId → { description, taskId, index }
-    this.completed = new Set();  // toolUseIds that finished
-    this._nextIndex = 0;
-    this.onChange = null;        // callback when state changes
+    this.total = 0;
+    this.done = new Set();
+    this.onChange = null;
   }
 
-  get spawnedCount() { return this.spawned.size; }
-  get completedCount() { return this.completed.size; }
+  get totalCount() { return this.total; }
+  get completedCount() { return this.done.size; }
 
-  handle(event) {
-    switch (event.type) {
-      case 'task_started':
-        this._onTaskStarted(event);
-        break;
-      case 'task_completed':
-        this._onTaskCompleted(event);
-        break;
-    }
-  }
-
-  _onTaskStarted(event) {
-    const id = event.toolUseId;
-    if (!id || this.spawned.has(id)) return;
-    this._nextIndex++;
-    this.spawned.set(id, {
-      description: event.description,
-      taskId: event.taskId,
-      index: this._nextIndex,
-    });
+  reset() {
+    if (this.total === 0 && this.done.size === 0) return;
+    this.total = 0;
+    this.done.clear();
     this.onChange?.();
   }
 
-  _onTaskCompleted(event) {
-    const id = event.toolUseId;
-    if (!id || this.completed.has(id)) return;
-    if (!this.spawned.has(id)) return;
-    if (event.status !== 'completed') return;
-    this.completed.add(id);
+  setTotal(n) {
+    const num = Number(n);
+    if (!Number.isFinite(num) || num <= 0) return;
+    if (num === this.total) return;
+    this.total = num;
+    this.onChange?.();
+  }
+
+  markDone(id) {
+    if (!id) return;
+    const key = String(id).trim();
+    if (!key || this.done.has(key)) return;
+    this.done.add(key);
     this.onChange?.();
   }
 }

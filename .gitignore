@@ -1,3 +1,5 @@
 node_modules/
 PROFILE.md
 event-log.jsonl
+artifacts/
+cli/.tui-test/

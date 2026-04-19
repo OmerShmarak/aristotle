@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { appendFileSync, writeFileSync } from 'fs';
+import { appendFileSync } from 'fs';
 
 /**
  * Pure Claude Code CLI parser.
@@ -17,8 +17,6 @@ import { appendFileSync, writeFileSync } from 'fs';
  *   { type: 'turn_end', stopReason, parentToolUseId, content }
  *       content: [{ type: 'text', text } | { type: 'tool_use', id, name, input }]
  *   { type: 'task_started', taskId, toolUseId, description, prompt }
- *   { type: 'task_progress', taskId, toolUseId, description, lastToolName }
- *   { type: 'task_completed', taskId, toolUseId, status, summary }
  *   { type: 'retry', attempt, maxRetries, delayMs, error }
  *   { type: 'compact', trigger }
  *   { type: 'result', ok, sessionId, result, cost, turns, durationMs }
@@ -41,9 +39,7 @@ export function runClaude(prompt, opts = {}) {
   if (opts.maxTurns) args.push('--max-turns', String(opts.maxTurns));
 
   const emit = opts.onEvent || (() => {});
-
-  // Optional raw event log for debugging
-  if (opts.eventLog) writeFileSync(opts.eventLog, '');
+  // eventLog is opened in append mode — caller owns lifecycle (truncation).
 
   return new Promise((resolve, reject) => {
     const proc = spawn('claude', args, {
@@ -65,7 +61,7 @@ export function runClaude(prompt, opts = {}) {
         if (!line.trim()) continue;
         try {
           const raw = JSON.parse(line);
-          if (opts.eventLog) appendFileSync(opts.eventLog, line + '\n');
+          if (opts.eventLog) appendFileSync(opts.eventLog, new Date().toISOString() + ' ' + line + '\n');
           const events = translate(raw);
           for (const e of events) {
             emit(e);
@@ -86,7 +82,7 @@ export function runClaude(prompt, opts = {}) {
       if (buffer.trim()) {
         try {
           const raw = JSON.parse(buffer);
-          if (opts.eventLog) appendFileSync(opts.eventLog, buffer + '\n');
+          if (opts.eventLog) appendFileSync(opts.eventLog, new Date().toISOString() + ' ' + buffer + '\n');
           for (const e of translate(raw)) {
             emit(e);
             if (e.type === 'result') { result = e.result; sessionId = e.sessionId || sessionId; }
@@ -168,21 +164,8 @@ function translateSystem(raw) {
         prompt: raw.prompt || '',
       }];
     case 'task_progress':
-      return [{
-        type: 'task_progress',
-        taskId: raw.task_id,
-        toolUseId: raw.tool_use_id,
-        description: raw.description || '',
-        lastToolName: raw.last_tool_name || '',
-      }];
     case 'task_notification':
-      return [{
-        type: 'task_completed',
-        taskId: raw.task_id,
-        toolUseId: raw.tool_use_id,
-        status: raw.status,
-        summary: raw.summary || '',
-      }];
+      return [];
     case 'api_retry':
       return [{
         type: 'retry',

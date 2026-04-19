@@ -6,10 +6,19 @@
   "bin": {
     "aristotle": "./bin/aristotle.js"
   },
+  "scripts": {
+    "test": "node test-tracker.js",
+    "smoke": "node test-smoke.js",
+    "tui-test": "tui-test"
+  },
   "dependencies": {
     "chalk": "^5.4.1",
     "ink": "^7.0.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.2.5"
+  },
+  "devDependencies": {
+    "@microsoft/tui-test": "^0.0.4",
+    "node-pty": "^1.1.0"
   }
 }

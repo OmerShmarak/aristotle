@@ -1,0 +1,11 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "text", "payload": {"text": "First turn message finishes here."}}
+{"delayMs": 100, "event": "phase", "payload": {"phase": "idle"}}
+{"delayMs": 0, "event": "turn_end", "payload": {}}
+{"delayMs": 300, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Second turn message starts here."}}
+{"delayMs": 100, "event": "phase", "payload": {"phase": "idle"}}
+{"delayMs": 0, "event": "turn_end", "payload": {}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}

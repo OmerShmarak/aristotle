@@ -33,7 +33,7 @@ Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
 - Spawns `claude -p --output-format stream-json --include-partial-messages`
 - Translates raw Claude Code events into normalized events
 - Knows nothing about Aristotle, chapters, or UI
-- Event types: `init`, `text`, `tool_start`, `task_started`, `task_completed`, `turn_end`, `result`, `retry`, `error`
+- Event types used by Aristotle: `init`, `text`, `tool_start`, `task_started`, `turn_end`, `result`, `retry`, `error`
 
 ### `lib/engine.js` — Conversation loop
 - Manages session state (sessionId for `--resume`)
@@ -41,10 +41,12 @@ Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
 - Builds the system prompt from BREAKDOWN.md + CLAUDE.md + PROFILE.md
 - Emits high-level events for the UI to consume
 - Tracks phase: `planning` → `writing` → `idle`
+- Uses `task_started` only as an early hint that chapter work has begun; progress itself is sentinel-driven
 
 ### `lib/tracker.js` — Chapter progress (pure data)
-- Consumes `task_started` / `task_completed` events
-- Tracks spawned/completed counts
+- Sentinel-driven: `setTotal(n)` and `markDone(id)` API
+- Engine parses `%%ARISTOTLE_CHAPTERS_TOTAL:N%%` and `%%ARISTOTLE_CHAPTER_DONE:<id>%%` from the outer model's text
+- Decouples progress from sub-agent counts, so chapter agents can fan out freely
 - No stdout writes — UI reads state via properties
 
 ### `ui/App.js` — Ink TUI
@@ -72,8 +74,9 @@ User runs: aristotle "quantum mechanics"
    └─ UI streams response
 
 3. User approves outline, engine sends: claude -p "approved" --resume <sessionId>
-   └─ Claude spawns chapter agents
-   └─ UI shows progress bar (task_started / task_completed events)
+   └─ Claude emits %%ARISTOTLE_CHAPTERS_TOTAL:N%% and spawns chapter agents
+   └─ Claude emits %%ARISTOTLE_CHAPTER_DONE:<id>%% per finalized chapter
+   └─ UI shows progress bar
 
 4. All chapters written → Claude compiles book
    └─ UI shows "done"

@@ -1,0 +1,5 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "chapters_total", "payload": {"total": 1}}
+{"delayMs": 50, "event": "status", "payload": {"message": "Designing the breakdown..."}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}

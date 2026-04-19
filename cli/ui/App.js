@@ -71,7 +71,7 @@ function ProgressBar({ done, total }) {
 }
 
 // ─── Main App ───────────────────────────────────────────
-export function App({ engine, banner, topic }) {
+export function App({ engine, banner, topic, sessionId }) {
   const { exit } = useApp();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -92,13 +92,17 @@ export function App({ engine, banner, topic }) {
     };
     const onPhase = (ev) => setPhase(ev.phase);
     const onStatus = (ev) => setStatus(ev.message);
-    const onTaskStarted = (ev) => {
-      tracker.handle(ev);
-      setProgress({ done: tracker.completedCount, total: tracker.spawnedCount });
+    const onTurnStart = () => {
+      tracker.reset();
+      setProgress({ done: 0, total: 0 });
     };
-    const onTaskCompleted = (ev) => {
-      tracker.handle(ev);
-      setProgress({ done: tracker.completedCount, total: tracker.spawnedCount });
+    const onChaptersTotal = (ev) => {
+      tracker.setTotal(ev.total);
+      setProgress({ done: tracker.completedCount, total: tracker.totalCount });
+    };
+    const onChapterDone = (ev) => {
+      tracker.markDone(ev.id);
+      setProgress({ done: tracker.completedCount, total: tracker.totalCount });
     };
     const onTurnEnd = () => {
       const finalText = smoother.flush();
@@ -117,8 +121,9 @@ export function App({ engine, banner, topic }) {
     engine.on('text', onText);
     engine.on('phase', onPhase);
     engine.on('status', onStatus);
-    engine.on('task_started', onTaskStarted);
-    engine.on('task_completed', onTaskCompleted);
+    engine.on('turn_start', onTurnStart);
+    engine.on('chapters_total', onChaptersTotal);
+    engine.on('chapter_done', onChapterDone);
     engine.on('turn_end', onTurnEnd);
     engine.on('error', onError);
     engine.on('done', onDone);
@@ -126,8 +131,9 @@ export function App({ engine, banner, topic }) {
       engine.off('text', onText);
       engine.off('phase', onPhase);
       engine.off('status', onStatus);
-      engine.off('task_started', onTaskStarted);
-      engine.off('task_completed', onTaskCompleted);
+      engine.off('turn_start', onTurnStart);
+      engine.off('chapters_total', onChaptersTotal);
+      engine.off('chapter_done', onChapterDone);
       engine.off('turn_end', onTurnEnd);
       engine.off('error', onError);
       engine.off('done', onDone);
@@ -167,7 +173,14 @@ export function App({ engine, banner, topic }) {
   });
 
   const isIdle = phase === 'idle' && started && !completed;
-  const isWorking = phase === 'planning' || phase === 'writing';
+  const showSpinner =
+    !smoother.display &&
+    progress.total === 0 &&
+    (phase === 'planning' || phase === 'writing');
+  const spinnerLabel =
+    phase === 'writing'
+      ? (status || 'Starting chapter jobs')
+      : (status || 'Thinking');
 
   return e(Box, { flexDirection: 'column' },
     // Completed messages scroll up via Static
@@ -178,14 +191,15 @@ export function App({ engine, banner, topic }) {
             e(Text, { color: '#C4A87C' }, banner),
             e(Text, { bold: true, color: '#8B4513' }, '  A R I S T O T L E'),
             e(Text, { color: '#8B8178' }, '  Understand everything.\n'),
-            e(Text, { color: '#DDD5C7' }, '  Topic: ', e(Text, { color: '#D2691E' }, topic), '\n'),
-            e(Text, { color: '#6B6358' }, '  ' + '─'.repeat(50) + '\n'),
+            e(Text, { color: '#DDD5C7' }, '  Topic: ', e(Text, { color: '#D2691E' }, topic)),
+            sessionId ? e(Text, { color: '#6B6358' }, `  Session: ${sessionId}`) : null,
+            e(Text, { color: '#6B6358' }, '\n  ' + '─'.repeat(50) + '\n'),
           );
         }
         const color = item.role === 'user' ? '#D2691E' : item.role === 'error' ? '#CD5C5C' : '#DDD5C7';
         const prefix = item.role === 'user' ? '\n  > ' : '';
         return e(Box, { key: String(item.id), paddingLeft: item.role === 'user' ? 0 : 2 },
-          e(Text, { color, wrap: 'wrap' }, prefix + item.text + (item.role === 'user' ? '\n' : '')),
+          e(Text, { color, wrap: 'wrap' }, prefix + item.text + '\n'),
         );
       }
     ),
@@ -193,16 +207,21 @@ export function App({ engine, banner, topic }) {
     // Live area
     e(Box, { flexDirection: 'column' },
 
-      // Streaming text + blinking cursor
-      smoother.display ? e(Box, { paddingLeft: 2 },
+      // Streaming text. While text is arriving, the text itself signals
+      // activity; we deliberately don't render a thinking indicator below
+      // it (users found it visually noisy during long passages like the
+      // chapter plan). Long silent pauses between tokens show as a static
+      // block, which is acceptable.
+      smoother.display ? e(Box, { flexDirection: 'column', paddingLeft: 2 },
         e(Text, { color: '#DDD5C7', wrap: 'wrap' }, smoother.display),
       ) : null,
 
-      // Status line with spinner (planning phase, no text yet)
-      phase === 'planning' && !smoother.display ? e(Box, { paddingLeft: 2 },
+      // Status line while planning, and during the brief writing bootstrap
+      // window before chapter totals arrive.
+      showSpinner ? e(Box, { paddingLeft: 2 },
         e(Spinner),
         e(Text, { color: '#8B8178' }, ' '),
-        e(PulsingText, {}, status || 'Thinking'),
+        e(PulsingText, {}, spinnerLabel),
       ) : null,
 
       // Progress bar with spinner (writing phase)
@@ -216,6 +235,7 @@ export function App({ engine, banner, topic }) {
         e(Text, { color: '#C4A87C', bold: true }, '\n  Your breakdown is ready!\n'),
         e(Text, { color: '#8B8178' }, '  Open it in your browser:\n'),
         e(Text, { color: '#D2691E', bold: true }, `    open ${completed.artifactPath}\n`),
+        sessionId ? e(Text, { color: '#6B6358' }, `  Session: ${sessionId}\n`) : null,
         e(Text, { color: '#6B6358' }, '─'.repeat(50)),
       ) : null,
 
