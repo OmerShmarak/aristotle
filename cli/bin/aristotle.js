@@ -57,6 +57,6 @@ try {
 // --- Render TUI ---
 const e = React.createElement;
 render(e(App, { engine, banner: bannerText, topic, sessionId }), {
-  exitOnCtrlC: true,
+  exitOnCtrlC: false,
   patchConsole: true,
 });

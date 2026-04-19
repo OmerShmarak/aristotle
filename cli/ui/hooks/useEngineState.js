@@ -14,6 +14,16 @@ export function useEngineState(engine) {
   const appendMessage = useCallback((message) => {
     setMessages((msgs) => [...msgs, message]);
   }, []);
+  const commitStreamingText = useCallback(() => {
+    const finalText = smoother.flush();
+    if (!finalText.trim()) return;
+
+    appendMessage({
+      id: Date.now(),
+      role: 'assistant',
+      text: finalText,
+    });
+  }, [appendMessage, smoother]);
 
   useEffect(() => {
     const syncProgress = () => {
@@ -61,15 +71,14 @@ export function useEngineState(engine) {
       syncProgress();
     };
 
-    const onTurnEnd = () => {
-      const finalText = smoother.flush();
-      if (finalText.trim()) {
-        appendMessage({
-          id: Date.now(),
-          role: 'assistant',
-          text: finalText,
-        });
+    const onToolStart = (ev) => {
+      if (!ev.parentToolUseId) {
+        commitStreamingText();
       }
+    };
+
+    const onTurnEnd = () => {
+      commitStreamingText();
       setPhase('idle');
     };
 
@@ -82,6 +91,13 @@ export function useEngineState(engine) {
     };
 
     const onDone = (ev) => setCompleted(ev);
+    const onInterrupted = (ev) => {
+      appendMessage({
+        id: Date.now(),
+        role: 'assistant',
+        text: ev.message || 'Interrupted current turn.',
+      });
+    };
 
     engine.on('text', onText);
     engine.on('phase', onPhase);
@@ -91,9 +107,11 @@ export function useEngineState(engine) {
     engine.on('turn_start', onTurnStart);
     engine.on('chapters_total', onChaptersTotal);
     engine.on('chapter_done', onChapterDone);
+    engine.on('tool_start', onToolStart);
     engine.on('turn_end', onTurnEnd);
     engine.on('error', onError);
     engine.on('done', onDone);
+    engine.on('interrupted', onInterrupted);
 
     return () => {
       engine.off('text', onText);
@@ -104,11 +122,13 @@ export function useEngineState(engine) {
       engine.off('turn_start', onTurnStart);
       engine.off('chapters_total', onChaptersTotal);
       engine.off('chapter_done', onChapterDone);
+      engine.off('tool_start', onToolStart);
       engine.off('turn_end', onTurnEnd);
       engine.off('error', onError);
       engine.off('done', onDone);
+      engine.off('interrupted', onInterrupted);
     };
-  }, [appendMessage, engine, smoother, tracker]);
+  }, [appendMessage, commitStreamingText, engine, smoother, tracker]);
 
   return {
     completed,

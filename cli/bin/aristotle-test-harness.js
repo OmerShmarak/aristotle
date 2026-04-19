@@ -21,7 +21,7 @@ await engine.init();
 
 const e = React.createElement;
 render(e(App, { engine, banner: '', topic }), {
-  exitOnCtrlC: true,
+  exitOnCtrlC: false,
   patchConsole: true,
   // Force interactive mode. tui-test spawns us under a PTY where isTTY is
   // true, but Ink's is-in-ci detection can still demote us to batch mode

@@ -43,6 +43,17 @@ export class Engine extends EventEmitter {
     this._pendingQuestion = null;
     this._probeActive = false;
     this._savedSessionId = null;
+    this._activeProc = null;
+    this._interruptRequested = false;
+    this._signalHandlers = {
+      interrupt: () => this._signalActiveTurn('SIGINT', {
+        alreadyRequested: this._interruptRequested,
+        beforeSend: () => {
+          this._interruptRequested = true;
+          this.emit('status', { message: 'Interrupting...' });
+        },
+      }),
+    };
     this._claudeLog = sessionDir ? resolve(sessionDir, 'claude.jsonl') : null;
     this._engineLog = sessionDir ? resolve(sessionDir, 'engine.jsonl') : null;
     resetLog(this._engineLog);
@@ -97,6 +108,7 @@ export class Engine extends EventEmitter {
     this._setPhase('planning');
     this._sentinelStream.reset();
     this._donePath = null;
+    this._interruptRequested = false;
     if (this._pendingQuestion) {
       this._pendingQuestion = null;
       this.emit('question_cleared');
@@ -106,6 +118,8 @@ export class Engine extends EventEmitter {
     const opts = {
       cwd: this.breakdownDir,
       onEvent: (event) => this._handleEvent(event),
+      onSpawn: (proc) => { this._activeProc = proc; },
+      isAborted: () => this._interruptRequested,
       permissionMode: 'auto',
       // Re-inject on every turn. Claude Code's `--resume` does NOT preserve
       // `--append-system-prompt` from the original invocation — verified
@@ -148,12 +162,24 @@ export class Engine extends EventEmitter {
         this.emit('done', { artifactPath });
       }
     } catch (err) {
+      if (err.code === 'ABORT_ERR') {
+        this.emit('interrupted', { message: 'Interrupted current turn.' });
+        this._setPhase('idle');
+        this.emit('turn_end');
+        if (this._probeActive && !this._pendingQuestion) {
+          this._finishProbe();
+        }
+        return;
+      }
       this.emit('error', { message: err.message });
       this._setPhase('idle');
       this.emit('turn_end');
       if (this._probeActive && !this._pendingQuestion) {
         this._finishProbe();
       }
+    } finally {
+      this._activeProc = null;
+      this._interruptRequested = false;
     }
   }
 
@@ -164,6 +190,22 @@ export class Engine extends EventEmitter {
     this._probeActive = true;
     this.emit('status', { message: 'Starting approval probe...' });
     return this.send(PROBE_APPROVAL_PROMPT);
+  }
+
+  signal(name) {
+    return this._signalHandlers[name]?.() ?? false;
+  }
+
+  interrupt() {
+    return this.signal('interrupt');
+  }
+
+  _signalActiveTurn(processSignal, { alreadyRequested = false, beforeSend } = {}) {
+    if (!this._activeProc || this.phase === 'idle') return false;
+    if (alreadyRequested) return false;
+    beforeSend?.();
+    this._activeProc.kill(processSignal);
+    return true;
   }
 
   _handleEvent(event) {

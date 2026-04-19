@@ -95,7 +95,18 @@ export function App({ engine, banner, topic, sessionId }) {
 
   // Ctrl+C to exit
   useInput((ch, key) => {
-    if (key.ctrl && ch === 'c') exit();
+    if (key.ctrl && ch === 'c') {
+      if (phase !== 'idle') {
+        const signaled = typeof engine.signal === 'function'
+          ? engine.signal('interrupt')
+          : typeof engine.interrupt === 'function'
+            ? engine.interrupt()
+            : false;
+        if (signaled) return;
+      }
+      exit();
+      return;
+    }
     if (key.return && phase === 'idle') {
       submitValue(inputRef.current);
     }
