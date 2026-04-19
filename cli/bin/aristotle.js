@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { resolve, dirname } from 'path';
-import { readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import React from 'react';
 import { render } from 'ink';
 import { App } from '../ui/App.js';
 import { Engine } from '../lib/engine.js';
 import { createSession } from '../lib/session.js';
+import { getBannerText, printHelp } from '../lib/theme.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
@@ -17,23 +18,11 @@ const rawArgs = process.argv.slice(2).filter(a => a !== '--debug');
 const topic = rawArgs.join(' ').trim();
 
 if (!topic || topic === '--help' || topic === '-h') {
-  // Show help without Ink
-  const { banner } = await import('../lib/theme.js');
-  banner();
-  const { colors } = await import('../lib/theme.js');
-  console.log(colors.text('  Usage: aristotle <topic>\n'));
-  console.log(colors.muted('  Examples:'));
-  console.log(colors.muted('    aristotle "machine learning"'));
-  console.log(colors.muted('    aristotle "quantum mechanics"'));
-  console.log(colors.muted('    aristotle "music theory"\n'));
+  printHelp();
   process.exit(topic ? 0 : 1);
 }
 
-// --- Load banner text ---
-let bannerText = '';
-try {
-  bannerText = readFileSync(resolve(__dirname, '..', 'aristotle.txt'), 'utf-8');
-} catch { /* no art */ }
+const bannerText = getBannerText();
 
 // --- Compute breakdown output dir ---
 // Always write to PROJECT_ROOT/artifacts/<slug> so books live with the repo.
@@ -68,6 +57,6 @@ try {
 // --- Render TUI ---
 const e = React.createElement;
 render(e(App, { engine, banner: bannerText, topic, sessionId }), {
-  exitOnCtrlC: true,
+  exitOnCtrlC: false,
   patchConsole: true,
 });
