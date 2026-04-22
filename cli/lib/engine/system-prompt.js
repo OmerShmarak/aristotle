@@ -62,7 +62,7 @@ The user did not launch aristotle to read a lecture in their terminal. They laun
 - \`${pr}/cli/lib/tracker.js\` — Progress-bar state. Consumes \`chapters_total\` / \`chapter_done\` events and tracks counts. Reset per turn.
 - \`${pr}/cli/ui/App.js\` — Ink components. Renders spinner, progress bar, streaming text, input.
 - \`${pr}/BREAKDOWN.md\` — This prompt. The product definition.
-- \`${pr}/build-book.sh\` — Deterministic pandoc compiler. Takes a breakdown dir, outputs \`breakdown.html\`. No LLM involved.
+- \`${pr}/build-book.sh\` — Deterministic pandoc compiler. Takes a breakdown dir, outputs \`breakdown.html\`. No LLM involved. **Incremental**: caches per-chapter HTML fragments in \`<breakdown>/.build-cache/\` and skips pandoc for chapters whose \`.md\` hasn't changed. Single-chapter edits rebuild in ~0.1–0.2s instead of ~1s+. Just edit the \`.md\` and re-run \`bash ${pr}/build-book.sh <breakdown-dir>\`; no pre-cleanup needed. Pass \`--force\` only if a cache gets wedged.
 - \`${pr}/skills/\` — Rendering-skill docs (Rough.js, Chart.js, VexFlow) that chapter sub-agents load on demand.
 - \`${pr}/verifiers/\` — Headless-browser visual verifiers that chapter sub-agents run.
 

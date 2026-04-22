@@ -330,6 +330,8 @@ After writing (and optional refinement), compile all chapters into `breakdown.ht
 
 **Do NOT spawn an agent for compilation.** Just run the script.
 
+**Incremental rebuilds are cheap.** The script caches each chapter's HTML fragment under `<breakdown>/.build-cache/` and re-runs pandoc only when the source `.md` is newer. A full book rebuilds from cache in ~70ms; editing a single chapter and re-running costs ~120ms. In chat mode, when the user asks to tweak or rewrite a chapter, the right flow is: edit the `.md` file in place → re-run `{{PROJECT_ROOT}}/build-book.sh .` → emit `%%ARISTOTLE_DONE:breakdown.html%%`. No need to pre-clean anything. Pass `--force` only if you suspect the cache is stale for some non-mtime reason.
+
 ---
 
 ## Example Invocation
