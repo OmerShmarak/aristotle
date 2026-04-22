@@ -8,7 +8,9 @@ export function Banner({ banner, topic, sessionId }) {
     e(Text, { color: '#C4A87C' }, banner),
     e(Text, { bold: true, color: '#8B4513' }, '  A R I S T O T L E'),
     e(Text, { color: '#8B8178' }, '  Understand everything.\n'),
-    e(Text, { color: '#DDD5C7' }, '  Topic: ', e(Text, { color: '#D2691E' }, topic)),
+    topic
+      ? e(Text, { color: '#DDD5C7' }, '  Topic: ', e(Text, { color: '#D2691E' }, topic))
+      : null,
     sessionId ? e(Text, { color: '#6B6358' }, `  Session: ${sessionId}`) : null,
     e(Text, { color: '#6B6358' }, '\n  ' + '─'.repeat(50) + '\n'),
   );

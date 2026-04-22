@@ -1,0 +1,7 @@
+{"delayMs": 100, "event": "turn_start", "payload": {}}
+{"delayMs": 50, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Working on it..."}}
+{"delayMs": 50, "event": "done", "payload": {"artifactPath": "/tmp/breakdown.html"}}
+{"delayMs": 50, "event": "phase", "payload": {"phase": "idle"}}
+{"delayMs": 50, "event": "turn_end", "payload": {}}
+{"delayMs": 60000, "event": "__exit", "payload": {"code": 0}}

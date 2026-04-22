@@ -14,13 +14,14 @@ if (!scriptPath) {
   process.exit(2);
 }
 
-const topic = process.env.ARISTOTLE_TEST_TOPIC || 'test topic';
+const topic = process.env.ARISTOTLE_TEST_TOPIC || null;
+const filesRoot = process.env.ARISTOTLE_TEST_FILES_ROOT || process.cwd();
 
 const engine = new MockEngine(scriptPath);
 await engine.init();
 
 const e = React.createElement;
-render(e(App, { engine, banner: '', topic }), {
+render(e(App, { engine, banner: '', topic, filesRoot }), {
   exitOnCtrlC: false,
   patchConsole: true,
   // Force interactive mode. tui-test spawns us under a PTY where isTTY is

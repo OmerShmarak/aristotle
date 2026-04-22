@@ -159,11 +159,14 @@ export class Engine extends EventEmitter {
         this._finishProbe();
       }
 
-      if (!this._isDone && this._donePath) {
+      if (this._donePath) {
+        // Chat mode: emit `done` every time a build lands. The first emission
+        // also triggers the slug rename; subsequent emissions just report the
+        // updated artifact path (the cwd already has its final name).
+        const finalDir = this._slug && !this._isDone
+          ? this._renameBreakdownDir(this._slug)
+          : this.breakdownDir;
         this._isDone = true;
-        // Session is over; safe to rename the cwd now (no more --resume calls,
-        // so Claude Code's per-cwd history lookup doesn't matter).
-        const finalDir = this._slug ? this._renameBreakdownDir(this._slug) : this.breakdownDir;
         const artifactPath = resolve(finalDir, this._donePath);
         this.emit('done', { artifactPath });
       }

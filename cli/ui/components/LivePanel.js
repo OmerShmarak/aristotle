@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
 import { answerPlaceholder } from '../lib/input.js';
+import { ChatInput } from './ChatInput.js';
 import { Spinner } from './Spinner.js';
 import { PulsingText } from './PulsingText.js';
 import { ProgressBar } from './ProgressBar.js';
@@ -9,16 +9,15 @@ import { ProgressBar } from './ProgressBar.js';
 const e = React.createElement;
 
 export function LivePanel({
-  completed,
   input,
   isIdle,
   phase,
   progress,
   question,
-  sessionId,
   smoother,
   status,
-  topicInputHandlers,
+  projectFiles,
+  chatHandlers,
 }) {
   const showSpinner =
     !smoother.display &&
@@ -44,24 +43,15 @@ export function LivePanel({
       e(ProgressBar, { done: progress.done, total: progress.total }),
     ) : null,
 
-    completed ? e(Box, { flexDirection: 'column', paddingLeft: 2, marginTop: 1 },
-      e(Text, { color: '#6B6358' }, '─'.repeat(50)),
-      e(Text, { color: '#C4A87C', bold: true }, '\n  Your breakdown is ready!\n'),
-      e(Text, { color: '#8B8178' }, '  Open it in your browser:\n'),
-      e(Text, { color: '#D2691E', bold: true }, `    open ${completed.artifactPath}\n`),
-      sessionId ? e(Text, { color: '#6B6358' }, `  Session: ${sessionId}\n`) : null,
-      e(Text, { color: '#6B6358' }, '─'.repeat(50)),
-    ) : null,
-
-    isIdle ? e(Box, { paddingLeft: 2, marginTop: 1 },
-      e(Text, { color: '#D2691E' }, '> '),
-      e(TextInput, {
+    isIdle ? e(Box, { flexDirection: 'column', marginTop: 1 },
+      e(ChatInput, {
         value: input,
-        onChange: topicInputHandlers.onChange,
-        onSubmit: topicInputHandlers.onSubmit,
-        placeholder: question ? answerPlaceholder(question) : '',
+        onChange: chatHandlers.onChange,
+        onSubmit: chatHandlers.onSubmit,
+        onCtrlCEmpty: chatHandlers.onCtrlCEmpty,
+        placeholder: question ? answerPlaceholder(question) : 'Type a message, @ to tag a file',
         focus: true,
-        showCursor: true,
+        projectFiles,
       }),
     ) : null,
   );

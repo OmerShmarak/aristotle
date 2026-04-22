@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import { useEngineState } from './hooks/useEngineState.js';
 import { isProbeCommand, normalizeAnswer } from './lib/input.js';
+import { listProjectFiles } from './lib/files.js';
+import { injectTaggedFiles } from './lib/inject-files.js';
 import { Transcript } from './components/Transcript.js';
 import { LivePanel } from './components/LivePanel.js';
 
 const e = React.createElement;
 
 // ─── Main App ───────────────────────────────────────────
-export function App({ engine, banner, topic, sessionId }) {
+export function App({ engine, banner, topic, sessionId, filesRoot }) {
   const { exit } = useApp();
   const [input, setInput] = useState('');
   const [started, setStarted] = useState(false);
   const submitLockRef = useRef(false);
-  const inputRef = useRef('');
   const {
     appendMessage,
     completed,
@@ -26,9 +27,13 @@ export function App({ engine, banner, topic, sessionId }) {
     status,
   } = useEngineState(engine);
 
+  const projectFiles = useMemo(
+    () => listProjectFiles(filesRoot || process.cwd()),
+    [filesRoot],
+  );
+
   const runProbeCommand = useCallback(() => {
     setInput('');
-    inputRef.current = '';
     const baseId = Date.now();
     appendMessage({ id: baseId, role: 'user', text: '/probe-approval' });
     appendMessage({
@@ -39,15 +44,19 @@ export function App({ engine, banner, topic, sessionId }) {
     engine.probeApproval();
   }, [appendMessage, engine]);
 
-  // Auto-send the initial topic
+  // Auto-send the initial topic IF one was provided on the command line.
+  // No topic → user gets an empty chat and starts the conversation.
   useEffect(() => {
-    if (!started) {
-      setStarted(true);
-      if (process.env.ARISTOTLE_AUTO_PROBE === '1') {
-        engine.probeApproval();
-        return;
-      }
-      if (process.env.ARISTOTLE_SKIP_INITIAL_SEND === '1') return;
+    if (started) return;
+    setStarted(true);
+    if (process.env.ARISTOTLE_AUTO_PROBE === '1') {
+      engine.probeApproval();
+      return;
+    }
+    if (process.env.ARISTOTLE_SKIP_INITIAL_SEND === '1') return;
+    if (topic) {
+      // Topic is already rendered in the banner — no need to also echo it as
+      // a user transcript row.
       engine.send(`I want to learn about: ${topic}`);
     }
   }, [started, engine, topic]);
@@ -62,73 +71,92 @@ export function App({ engine, banner, topic, sessionId }) {
       return;
     }
 
-    const text = normalizeAnswer(raw, question);
+    const displayText = normalizeAnswer(raw, question);
+    const modelText = question
+      ? displayText
+      : injectTaggedFiles(displayText, filesRoot || process.cwd());
     setInput('');
-    appendMessage({ id: Date.now(), role: 'user', text });
+    appendMessage({ id: Date.now(), role: 'user', text: displayText });
     if (question) setQuestion(null);
-    engine.send(text);
+    engine.send(modelText);
     queueMicrotask(() => { submitLockRef.current = false; });
-  }, [appendMessage, phase, engine, question, runProbeCommand, setQuestion]);
+  }, [appendMessage, phase, engine, question, runProbeCommand, setQuestion, filesRoot]);
 
-  // Handle user submit
-  const handleSubmit = useCallback((value) => {
-    submitValue(value);
-  }, [submitValue]);
+  // When the engine emits `done`, append the open-it message to the transcript
+  // and keep the chat open. No more auto-exit.
+  const prevCompletedRef = useRef(null);
+  useEffect(() => {
+    if (!completed || completed === prevCompletedRef.current) return;
+    prevCompletedRef.current = completed;
+    appendMessage({
+      id: Date.now(),
+      role: 'assistant',
+      text: `Your breakdown is ready. Open it:\n  open ${completed.artifactPath}`,
+    });
+  }, [completed, appendMessage]);
+
+  // Ctrl+C when the input is empty → double-tap to exit, matching Claude
+  // Code's behavior. The ChatInput handles single-tap clear itself.
+  const lastCtrlCRef = useRef(0);
+  const handleCtrlCEmpty = useCallback(() => {
+    const now = Date.now();
+    if (phase !== 'idle') {
+      const signaled = typeof engine.signal === 'function'
+        ? engine.signal('interrupt')
+        : typeof engine.interrupt === 'function'
+          ? engine.interrupt()
+          : false;
+      if (signaled) return;
+    }
+    if (now - lastCtrlCRef.current < 2000) {
+      exit();
+      process.exit(0);
+      return;
+    }
+    lastCtrlCRef.current = now;
+  }, [engine, exit, phase]);
+
+  // While the model is thinking/writing, Ctrl+C interrupts the active turn.
+  // During idle, Ctrl+C is handled inside ChatInput (which calls
+  // handleCtrlCEmpty when the buffer is empty).
+  useInput((ch, key) => {
+    if (key.ctrl && ch === 'c' && phase !== 'idle') {
+      const signaled = typeof engine.signal === 'function'
+        ? engine.signal('interrupt')
+        : typeof engine.interrupt === 'function'
+          ? engine.interrupt()
+          : false;
+      if (!signaled) {
+        exit();
+        process.exit(0);
+      }
+    }
+  }, { isActive: phase !== 'idle' });
 
   const handleInputChange = useCallback((value) => {
-    inputRef.current = value;
     setInput(value);
     if (phase === 'idle' && isProbeCommand(value) && !submitLockRef.current) {
       queueMicrotask(() => submitValue(value));
     }
-  }, [isProbeCommand, phase, submitValue]);
+  }, [phase, submitValue]);
 
-  // Auto-exit after breakdown is complete
-  useEffect(() => {
-    if (!completed) return;
-    const t = setTimeout(() => {
-      exit();
-      process.exit(0);
-    }, 500);
-    return () => clearTimeout(t);
-  }, [completed, exit]);
-
-  // Ctrl+C to exit
-  useInput((ch, key) => {
-    if (key.ctrl && ch === 'c') {
-      if (phase !== 'idle') {
-        const signaled = typeof engine.signal === 'function'
-          ? engine.signal('interrupt')
-          : typeof engine.interrupt === 'function'
-            ? engine.interrupt()
-            : false;
-        if (signaled) return;
-      }
-      exit();
-      return;
-    }
-    if (key.return && phase === 'idle') {
-      submitValue(inputRef.current);
-    }
-  });
-
-  const isIdle = phase === 'idle' && started && !completed;
+  const isIdle = phase === 'idle' && started;
 
   return e(Box, { flexDirection: 'column' },
     e(Transcript, { banner, messages, sessionId, topic }),
     e(LivePanel, {
-      completed,
       input,
       isIdle,
       phase,
       progress,
       question,
-      sessionId,
       smoother,
       status,
-      topicInputHandlers: {
+      projectFiles,
+      chatHandlers: {
         onChange: handleInputChange,
-        onSubmit: handleSubmit,
+        onSubmit: submitValue,
+        onCtrlCEmpty: handleCtrlCEmpty,
       },
     }),
   );
