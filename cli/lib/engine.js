@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { runClaude, checkClaude } from './claude.js';
-import { resolve } from 'path';
+import { existsSync, renameSync } from 'fs';
+import { dirname, resolve } from 'path';
 import { PROBE_APPROVAL_PROMPT } from './engine/constants.js';
 import { appendJsonLine, resetLog } from './engine/event-log.js';
 import { extractQuestions } from './engine/permission-questions.js';
@@ -57,10 +58,12 @@ export class Engine extends EventEmitter {
     this._claudeLog = sessionDir ? resolve(sessionDir, 'claude.jsonl') : null;
     this._engineLog = sessionDir ? resolve(sessionDir, 'engine.jsonl') : null;
     resetLog(this._engineLog);
+    this._slug = null;
     this._sentinelStream = new SentinelStream({
       onChaptersTotal: (total) => this.emit('chapters_total', { total }),
       onChapterDone: (id) => this.emit('chapter_done', { id }),
       onDonePath: (path) => { this._donePath = path; },
+      onSlug: (slug) => { this._slug = slug; },
       onText: (text) => this.emit('text', { text, parentToolUseId: null }),
       shouldEmitText: () => this.phase !== 'writing',
     });
@@ -158,7 +161,10 @@ export class Engine extends EventEmitter {
 
       if (!this._isDone && this._donePath) {
         this._isDone = true;
-        const artifactPath = resolve(this.breakdownDir, this._donePath);
+        // Session is over; safe to rename the cwd now (no more --resume calls,
+        // so Claude Code's per-cwd history lookup doesn't matter).
+        const finalDir = this._slug ? this._renameBreakdownDir(this._slug) : this.breakdownDir;
+        const artifactPath = resolve(finalDir, this._donePath);
         this.emit('done', { artifactPath });
       }
     } catch (err) {
@@ -249,6 +255,34 @@ export class Engine extends EventEmitter {
     for (const question of extractQuestions(permissionDenials)) {
       this._pendingQuestion = question;
       this.emit('question', this._pendingQuestion);
+    }
+  }
+
+  _renameBreakdownDir(rawSlug) {
+    const sanitized = rawSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .split('_')
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('_');
+    if (!sanitized) return this.breakdownDir;
+
+    const parent = dirname(this.breakdownDir);
+    let target = resolve(parent, sanitized);
+    let i = 2;
+    while (target !== this.breakdownDir && existsSync(target)) {
+      target = resolve(parent, `${sanitized}_${i++}`);
+    }
+    if (target === this.breakdownDir) return this.breakdownDir;
+
+    try {
+      renameSync(this.breakdownDir, target);
+      this.breakdownDir = target;
+      return target;
+    } catch {
+      return this.breakdownDir;
     }
   }
 

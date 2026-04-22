@@ -3,15 +3,17 @@ import {
   DONE_RE,
   MAX_PARTIAL_LEN,
   SENTINEL_RE,
+  SLUG_RE,
   TOTAL_RE,
 } from './constants.js';
 
 export class SentinelStream {
-  constructor({ onChaptersTotal, onChapterDone, onDonePath, onText, shouldEmitText }) {
+  constructor({ onChaptersTotal, onChapterDone, onDonePath, onSlug, onText, shouldEmitText }) {
     this.buffer = '';
     this.onChaptersTotal = onChaptersTotal;
     this.onChapterDone = onChapterDone;
     this.onDonePath = onDonePath;
+    this.onSlug = onSlug;
     this.onText = onText;
     this.shouldEmitText = shouldEmitText;
   }
@@ -84,6 +86,11 @@ export class SentinelStream {
 
     if ((match = token.match(DONE_RE))) {
       this.onDonePath(match[1].trim());
+      return;
+    }
+
+    if ((match = token.match(SLUG_RE))) {
+      this.onSlug?.(match[1].trim());
     }
   }
 }

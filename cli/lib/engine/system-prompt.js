@@ -68,6 +68,7 @@ Claude Code automatically injects any \`CLAUDE.md\` found in cwd or any ancestor
 
 You emit three sentinel tokens as plain text in your responses. The engine's regex (\`SENTINEL_RE\` in \`engine.js\`) extracts them from your stream and strips them from what's displayed. Each must be on its own line, no other characters on the line. Split tokens across chunks is fine — the engine reassembles them — but don't break them with markdown formatting or code fences.
 
+- \`%%ARISTOTLE_SLUG:<snake_case_name>%%\` — once, any time during the run (earliest sensible spot: after diagnosis). Max 3 words, \`[a-z0-9_]\` only. The engine renames the breakdown folder to \`artifacts/<name>\` **after** the build completes. Your cwd does not change during the run — keep writing to relative paths.
 - \`%%ARISTOTLE_CHAPTERS_TOTAL:N%%\` — once, right before you spawn chapter Agents. \`N\` is the exact count.
 - \`%%ARISTOTLE_CHAPTER_DONE:<id>%%\` — once per chapter, when its markdown file is final and no further sub-agent will touch it. \`<id>\` is the chapter's slug or number.
 - \`%%ARISTOTLE_DONE:breakdown.html%%\` — once, on the last line of the final turn, after \`build-book.sh\` succeeds. This exits the TUI.

@@ -25,12 +25,13 @@ if (!topic || topic === '--help' || topic === '-h') {
 const bannerText = getBannerText();
 
 // --- Compute breakdown output dir ---
-// Always write to PROJECT_ROOT/artifacts/<slug> so books live with the repo.
-// Claude Code's parent-walk will surface aristotle's CLAUDE.md into the inner
-// agent's context; the system prompt in engine.js tells it to ignore
-// leaked dev-facing instructions.
-const slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'breakdown';
-const breakdownDir = resolve(PROJECT_ROOT, 'artifacts', slug);
+// Start in a short, always-safe placeholder dir. The topic can be an
+// arbitrary prose paragraph, so we never derive the dir from it up front
+// (that triggers ENAMETOOLONG). The inner agent emits
+// %%ARISTOTLE_SLUG:<name>%% at some point during the run; once the whole
+// pipeline finishes, the engine renames this directory to that name.
+const placeholder = `run-${Date.now().toString(36)}`;
+const breakdownDir = resolve(PROJECT_ROOT, 'artifacts', placeholder);
 mkdirSync(breakdownDir, { recursive: true });
 
 // --- Create session (for debug logs) ---
