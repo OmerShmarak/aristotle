@@ -140,5 +140,6 @@ export function useEngineState(engine) {
     smoother,
     status,
     appendMessage,
+    setMessages,
   };
 }

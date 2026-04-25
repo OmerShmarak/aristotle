@@ -42,12 +42,15 @@ export function printHelp() {
   printBanner();
   console.log(colors.text('  Usage: aristotle [topic]\n'));
   console.log(colors.muted('  With a topic: starts building the breakdown immediately.'));
-  console.log(colors.muted('  Without a topic: opens a chat.\n'));
+  console.log(colors.muted('  Without a topic: opens a chat.'));
+  console.log(colors.muted('  -r / --resume [id]: resume a past session (picker if no id).\n'));
   console.log(colors.muted('  In chat you can tag files with @path (autocomplete),'));
   console.log(colors.muted('  use Ctrl+W / Option+Backspace to delete by word,'));
+  console.log(colors.muted('  Ctrl+R to resume a past session,'));
   console.log(colors.muted('  and Ctrl+C to clear the input (press twice to exit).\n'));
   console.log(colors.muted('  Examples:'));
   console.log(colors.muted('    aristotle'));
   console.log(colors.muted('    aristotle "machine learning"'));
-  console.log(colors.muted('    aristotle "music theory"\n'));
+  console.log(colors.muted('    aristotle -r'));
+  console.log(colors.muted('    aristotle -r 20260101-120000-abcd\n'));
 }

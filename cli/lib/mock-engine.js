@@ -36,10 +36,17 @@ export class MockEngine extends EventEmitter {
     return 'mock';
   }
 
-  send(_message) {
+  send(message) {
+    this.emit('user_message', { text: message });
     if (this._started) return;
     this._started = true;
     this._replay();
+  }
+
+  setResume({ sessionId, breakdownDir } = {}) {
+    this.sessionId = sessionId;
+    this.breakdownDir = breakdownDir;
+    this._lastResume = { sessionId, breakdownDir };
   }
 
   probeApproval() {

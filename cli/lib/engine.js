@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { runClaude, checkClaude } from './claude.js';
+import { defaultProvider } from './providers/index.js';
 import { existsSync, renameSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { PROBE_APPROVAL_PROMPT } from './engine/constants.js';
@@ -7,6 +7,7 @@ import { appendJsonLine, resetLog } from './engine/event-log.js';
 import { extractQuestions } from './engine/permission-questions.js';
 import { SentinelStream } from './engine/sentinel-stream.js';
 import { buildSystemPrompt } from './engine/system-prompt.js';
+import { updateMeta } from './session.js';
 
 /**
  * Aristotle engine — manages the conversation loop with Claude.
@@ -31,11 +32,12 @@ export class Engine extends EventEmitter {
    * @param {string} breakdownDir - where the inner agent runs (cwd) and writes chapters. Typically `<projectRoot>/artifacts/<slug>`. The inner agent WILL see aristotle's CLAUDE.md via parent-walk; the briefing below tells it to ignore dev-facing leakage.
    * @param {string} [sessionDir] - when provided, raw claude stream-json is written to <sessionDir>/claude.jsonl and every Engine event is mirrored to <sessionDir>/engine.jsonl for later debugging.
    */
-  constructor(projectRoot, breakdownDir, sessionDir) {
+  constructor(projectRoot, breakdownDir, sessionDir, options = {}) {
     super();
     this.projectRoot = projectRoot;
     this.breakdownDir = breakdownDir || projectRoot;
     this.sessionDir = sessionDir || null;
+    this.provider = options.provider || defaultProvider();
     this.sessionId = null;
     this.systemPrompt = null;
     this.phase = 'idle';
@@ -44,6 +46,11 @@ export class Engine extends EventEmitter {
     this._pendingQuestion = null;
     this._probeActive = false;
     this._savedSessionId = null;
+    // True once setResume() borrows a token from a prior session. Stops the
+    // engine from re-persisting that token (and so duplicating the session)
+    // into this run's fresh debug dir. The original session remains the sole
+    // owner of its providerSessionId in the picker.
+    this._inheritedResume = false;
     this._activeProc = null;
     this._interruptRequested = false;
     this._signalHandlers = {
@@ -89,9 +96,9 @@ export class Engine extends EventEmitter {
   }
 
   async init() {
-    const version = await checkClaude();
+    const version = await this.provider.check();
     if (!version) {
-      throw new Error('Claude Code is not installed. Run: npm install -g @anthropic-ai/claude-code');
+      throw new Error(`Provider "${this.provider.name}" is not available.`);
     }
     this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir);
     // ARISTOTLE_EVENT_LOG overrides the session-dir path. Keeps legacy ad-hoc
@@ -115,6 +122,9 @@ export class Engine extends EventEmitter {
     if (this._pendingQuestion) {
       this._pendingQuestion = null;
       this.emit('question_cleared');
+    }
+    if (!this._probeActive) {
+      this.emit('user_message', { text: message });
     }
     this.emit('turn_start');
 
@@ -146,8 +156,11 @@ export class Engine extends EventEmitter {
     }
 
     try {
-      const { sessionId } = await runClaude(message, opts);
-      this.sessionId = sessionId;
+      const { sessionId } = await this.provider.run(message, opts);
+      if (sessionId && sessionId !== this.sessionId) {
+        this.sessionId = sessionId;
+        this._persistResumeToken();
+      }
 
       // Flush any remaining buffered text (may contain a trailing sentinel)
       this._sentinelStream.flush();
@@ -199,6 +212,29 @@ export class Engine extends EventEmitter {
     this._probeActive = true;
     this.emit('status', { message: 'Starting approval probe...' });
     return this.send(PROBE_APPROVAL_PROMPT);
+  }
+
+  // Resume a prior conversation. The resume token is opaque to the engine —
+  // whatever the provider stored on the original run.
+  setResume({ sessionId, breakdownDir } = {}) {
+    if (sessionId) this.sessionId = sessionId;
+    if (breakdownDir) {
+      this.breakdownDir = breakdownDir;
+      this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir);
+    }
+    this._inheritedResume = true;
+  }
+
+  _persistResumeToken() {
+    if (!this.sessionDir) return;
+    if (this._inheritedResume) return;
+    try {
+      updateMeta(this.sessionDir, {
+        provider: this.provider.name,
+        providerSessionId: this.sessionId,
+        breakdownDir: this.breakdownDir,
+      });
+    } catch { /* non-fatal */ }
   }
 
   signal(name) {
