@@ -23,29 +23,19 @@ sudo apt install pandoc
 
 You are ready to go.
 
-## Two ways to run it
-
-### 1. Chat — just type `aristotle`
+## Run it
 
 ```
 aristotle
 ```
 
-Opens a free-form chat. Ask questions, get answers, drop a file with `@path` (with autocomplete), or pivot into building a full breakdown whenever you want by saying so. Chat is the right mode when you don't yet know what you want — you're poking at a topic, asking follow-ups, deciding whether it's worth a deeper dive.
+Opens a chat. From there, do whatever you want — ask a quick question, request a full breakdown of a topic, follow up on something you read, rewrite a chapter you didn't like, drop a file with `@path`. The chat is the interface; breakdowns are one of the things it can produce.
 
-In-chat keys:
-- `@` — tag a file or directory; autocomplete suggests paths.
-- `Ctrl+W` / `Option+Backspace` — delete previous word.
-- `Ctrl+R` — resume a previous session (picker).
-- `Ctrl+C` — clear the input. Press twice to exit.
-
-### 2. Breakdown — `aristotle "<question>"`
+If you already know what you want, you can pre-seed the chat with your question:
 
 ```
 aristotle "How does a plane work?"
 ```
-
-Skips chat and goes straight to the breakdown pipeline: diagnoses what you already know, proposes an outline, then writes every chapter in parallel.
 
 Prefer a specific question to a broad domain. *"How does a plane work?"* yields a tight book; *"I want to understand aerospace engineering"* yields a syllabus. Specific questions force a useful destination, and the dependency chain is automatically as deep as the gap between you and that destination requires.
 
@@ -56,11 +46,11 @@ aristotle --resume                         # picks from a list
 aristotle --resume 20260101-120000-abcd    # resume specific session
 ```
 
-Every run is logged under `~/.aristotle/sessions/<id>/`. Resume continues the conversation exactly where it left off, with the same artifact directory and full message history.
+Every run is logged under `~/.aristotle/sessions/<id>/`. Resume continues the conversation where you left off, with the same artifact directory and full message history.
 
 ## What you get
 
-Everything lives inside `artifacts/<slug>/`, where `<slug>` is derived from your topic (e.g. `artifacts/how-does-a-plane-work/`):
+When the chat builds a breakdown, everything lives inside `artifacts/<slug>/`, where `<slug>` is derived from the topic (e.g. `artifacts/how-does-a-plane-work/`):
 
 | File | What it is |
 |------|-----------|
@@ -73,8 +63,6 @@ When the breakdown finishes, Aristotle prints the command to open it:
 open artifacts/how-does-a-plane-work/breakdown.html
 ```
 
-In chat mode, no artifact is produced unless you ask for one — chat just talks.
-
 ## Design principles
 
 1. Understanding something means having the ability to derive it from scratch.
@@ -82,9 +70,9 @@ In chat mode, no artifact is produced unless you ask for one — chat just talks
 
 ## The breakdown process
 
-What happens when you run `aristotle "<question>"`:
+When you ask Aristotle to build a breakdown:
 
-1. **Knowledge diagnosis** — Aristotle asks a few calibrating questions to find the boundary of what you already know, binary-search style. This avoids re-teaching what you've got and avoids assuming what you haven't.
+1. **Knowledge diagnosis** — a few calibrating questions to find the boundary of what you already know, binary-search style. Avoids re-teaching what you've got and avoids assuming what you haven't.
 
 2. **Learning path** — a dependency chain of chapters, sized to the gap between what you know and what you want to understand. Could be 5 chapters, could be 50.
 
@@ -92,7 +80,7 @@ What happens when you run `aristotle "<question>"`:
 
 4. **Compile** — `build-book.sh artifacts/<slug>/` produces `breakdown.html`.
 
-The chapter agents auto-verify every visual they include: render-check (does it actually paint pixels?) plus collision-check (do labels overlap drawings?). Verifiers fail on uncaught JS errors and CDN failures, so a broken visual surfaces immediately instead of shipping silently.
+Chapter agents auto-verify every visual they include: render-check (does it actually paint pixels?) plus collision-check (do labels overlap drawings?). Verifiers fail on uncaught JS errors and CDN failures, so a broken visual surfaces immediately instead of shipping silently.
 
 ## Technical internals
 
@@ -114,7 +102,7 @@ The chapter agents auto-verify every visual they include: render-check (does it 
 
 ### Visuals
 
-Chapter agents have five renderers to choose from:
+Chapter agents pick from these renderers:
 
 | Skill | Library | Use when |
 |-------|---------|----------|
