@@ -18,6 +18,11 @@ const RENDERER_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js',
   'https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js',
   'https://cdn.jsdelivr.net/npm/3dmol@2.4.0/build/3Dmol-min.js',
+  'https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js',
+];
+
+const RENDERER_STYLES = [
+  'https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css',
 ];
 
 const KATEX_HEAD = [
@@ -28,7 +33,8 @@ const KATEX_HEAD = [
 
 const BUILD_HEAD = [
   ...KATEX_HEAD,
+  ...RENDERER_STYLES.map((url) => `<link rel="stylesheet" href="${url}">`),
   ...RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`),
 ];
 
-module.exports = { RENDERER_SCRIPTS, KATEX_HEAD, BUILD_HEAD };
+module.exports = { RENDERER_SCRIPTS, RENDERER_STYLES, KATEX_HEAD, BUILD_HEAD };

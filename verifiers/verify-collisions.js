@@ -15,12 +15,14 @@ const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
 const sharp = require('sharp');
-const { RENDERER_SCRIPTS } = require('../cdn-scripts.js');
+const { RENDERER_SCRIPTS, RENDERER_STYLES } = require('../cdn-scripts.js');
 
 const PADDING = 2; // px tolerance around text bbox
 
 function buildCdnTags() {
-  return RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`).join('\n');
+  const styles = RENDERER_STYLES.map((url) => `<link rel="stylesheet" href="${url}">`);
+  const scripts = RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`);
+  return [...styles, ...scripts].join('\n');
 }
 
 function buildHtml(chapterFile, disableText) {
