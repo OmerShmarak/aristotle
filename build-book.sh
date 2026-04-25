@@ -6,8 +6,12 @@ set -euo pipefail
 # Example: ./build-book.sh machine-learning
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <breakdown-directory>" >&2
+  echo "Usage: $0 <breakdown-directory> [--force]" >&2
   echo "Example: $0 machine-learning" >&2
+  echo "" >&2
+  echo "Re-runs are incremental: per-chapter HTML fragments are cached under" >&2
+  echo ".build-cache/ and only regenerated when the source .md is newer." >&2
+  echo "Pass --force to rebuild every chapter." >&2
   exit 1
 fi
 
@@ -15,6 +19,14 @@ BREAKDOWN_DIR="$(cd "$1" && pwd)"
 CHAPTERS_DIR="$BREAKDOWN_DIR/chapters"
 OUTLINE="$BREAKDOWN_DIR/outline.md"
 OUTPUT="$BREAKDOWN_DIR/breakdown.html"
+CACHE_DIR="$BREAKDOWN_DIR/.build-cache"
+
+FORCE_REBUILD=0
+if [ "${2:-}" = "--force" ]; then
+  FORCE_REBUILD=1
+fi
+
+mkdir -p "$CACHE_DIR"
 
 # Verify pandoc exists
 if ! command -v pandoc &>/dev/null; then
@@ -27,15 +39,10 @@ if [ ! -d "$CHAPTERS_DIR" ]; then
   exit 1
 fi
 
-# All renderer CDN scripts (included unconditionally — unused scripts are harmless)
-CDN_SCRIPTS='<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css">
-<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js"></script>'
+# All renderer CDN scripts — single source of truth in cdn-scripts.js.
+# To add a new renderer script, edit cdn-scripts.js (see comments there).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CDN_SCRIPTS=$(node -e "console.log(require('$SCRIPT_DIR/cdn-scripts.js').BUILD_HEAD.join('\n'))")
 
 # Extract title from outline H1 if available, else use directory name
 if [ -f "$OUTLINE" ]; then
@@ -60,10 +67,15 @@ echo "Building book from $NUM_CHAPTERS chapters..."
 TOC_HTML=""
 CHAPTERS_HTML=""
 
+REBUILT_COUNT=0
+CACHED_COUNT=0
+
 for i in "${!CHAPTER_FILES[@]}"; do
   FILE="${CHAPTER_FILES[$i]}"
   CHAPTER_NUM=$((i + 1))
   CHAPTER_ID="ch-$(printf '%02d' "$CHAPTER_NUM")"
+  BASE="$(basename "$FILE" .md)"
+  CACHE_FILE="$CACHE_DIR/${BASE}.html"
 
   # Extract title from first H1 line
   CHAPTER_TITLE=$(grep -m1 '^# ' "$FILE" | sed 's/^# //')
@@ -72,11 +84,21 @@ for i in "${!CHAPTER_FILES[@]}"; do
   TOC_HTML="$TOC_HTML    <li><a href=\"#${CHAPTER_ID}\"><span class=\"num\">${CHAPTER_NUM}.</span> ${CHAPTER_TITLE}</a></li>
 "
 
-  # Convert markdown to HTML fragment via pandoc
-  BODY=$(pandoc --from=markdown+tex_math_dollars --to=html5 --mathjax --syntax-highlighting=none "$FILE")
-
-  # Remove the first <h1> from body (we'll add it as the chapter header)
-  BODY=$(echo "$BODY" | sed '0,/<h1[^>]*>.*<\/h1>/s///')
+  # Incremental: reuse the cached HTML fragment when it's newer than the
+  # source markdown. Pandoc is the slow step; everything else (title
+  # extraction, TOC assembly, final concatenation) runs unconditionally.
+  if [ "$FORCE_REBUILD" -eq 0 ] && [ -f "$CACHE_FILE" ] && [ "$CACHE_FILE" -nt "$FILE" ]; then
+    BODY=$(cat "$CACHE_FILE")
+    STATUS="cached"
+    CACHED_COUNT=$((CACHED_COUNT + 1))
+  else
+    BODY=$(pandoc --from=markdown+tex_math_dollars --to=html5 --mathjax --syntax-highlighting=none "$FILE")
+    # Remove the first <h1> from body (we re-render it as the chapter header).
+    BODY=$(echo "$BODY" | sed '0,/<h1[^>]*>.*<\/h1>/s///')
+    printf '%s' "$BODY" > "$CACHE_FILE"
+    STATUS="rebuilt"
+    REBUILT_COUNT=$((REBUILT_COUNT + 1))
+  fi
 
   CHAPTERS_HTML="$CHAPTERS_HTML
 <section class=\"chapter\" id=\"${CHAPTER_ID}\">
@@ -85,7 +107,7 @@ ${BODY}
   <div class=\"back-to-top\"><a href=\"#toc\">&uarr; Contents</a></div>
 </section>
 "
-  echo "  [$CHAPTER_NUM/$NUM_CHAPTERS] $CHAPTER_TITLE"
+  echo "  [$CHAPTER_NUM/$NUM_CHAPTERS] $CHAPTER_TITLE ($STATUS)"
 done
 
 # --- Write the final HTML ---
@@ -344,23 +366,6 @@ canvas {
   max-width: 100%;
 }
 
-/* JSXGraph polish: strip the library defaults that fight the book aesthetic. */
-.jxgbox {
-  border: none !important;
-  background: transparent !important;
-  margin: 1.5rem auto 2rem;
-  box-shadow: none !important;
-}
-.jxgbox svg { overflow: visible; }
-.JXGtext {
-  outline: none !important;              /* kill the tabindex focus ring */
-  font-family: Georgia, 'Times New Roman', serif !important;
-  letter-spacing: 0.005em;
-}
-/* Point labels: match book body serif as well. */
-.jxgbox text { font-family: Georgia, 'Times New Roman', serif; }
-.diagram-block { margin: 2rem 0; }
-
 .back-to-top {
   margin-top: 2.5rem;
   padding-top: 1rem;
@@ -433,5 +438,5 @@ document.addEventListener("DOMContentLoaded", function() {
 </html>
 HTMLEOF
 
-echo "Done: $OUTPUT ($NUM_CHAPTERS chapters)"
+echo "Done: $OUTPUT ($NUM_CHAPTERS chapters, $REBUILT_COUNT rebuilt, $CACHED_COUNT cached)"
 echo "File size: $(du -h "$OUTPUT" | cut -f1)"

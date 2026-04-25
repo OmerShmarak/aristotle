@@ -5,54 +5,52 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Warm earth tones
 export const colors = {
-  title:    chalk.hex('#8B4513'),       // saddle brown
-  subtitle: chalk.hex('#C4A87C'),       // warm tan
-  accent:   chalk.hex('#D2691E'),       // chocolate
-  text:     chalk.hex('#DDD5C7'),       // warm white
-  muted:    chalk.hex('#8B8178'),       // warm gray
-  success:  chalk.hex('#6B8E23'),       // olive green
-  error:    chalk.hex('#CD5C5C'),       // indian red
-  dim:      chalk.hex('#6B6358'),       // dark warm gray
+  title: chalk.hex('#8B4513'),
+  subtitle: chalk.hex('#C4A87C'),
+  accent: chalk.hex('#D2691E'),
+  text: chalk.hex('#DDD5C7'),
+  muted: chalk.hex('#8B8178'),
+  success: chalk.hex('#6B8E23'),
+  error: chalk.hex('#CD5C5C'),
+  dim: chalk.hex('#6B6358'),
 };
 
-function loadAsciiArt() {
+export function getBannerText() {
   try {
-    const art = readFileSync(resolve(__dirname, '..', 'aristotle.txt'), 'utf-8');
-    return colors.subtitle(art);
+    return readFileSync(resolve(__dirname, '..', 'aristotle.txt'), 'utf-8');
   } catch {
     return '';
   }
 }
 
-const ARISTOTLE = loadAsciiArt();
+export function printBanner(topic) {
+  const banner = getBannerText();
+  if (banner) {
+    console.log(colors.subtitle(banner));
+  }
 
-export function banner(topic) {
-  console.log(ARISTOTLE);
   console.log(colors.title('  A R I S T O T L E'));
-  console.log(colors.muted('  Learn everything.\n'));
+  console.log(colors.muted('  Understand everything.\n'));
+
   if (topic) {
     console.log(colors.text(`  Topic: ${colors.accent(topic)}\n`));
   }
 }
 
-export function step(label) {
-  console.log(colors.accent(`\n▸ ${label}`));
-}
-
-export function info(msg) {
-  console.log(colors.muted(`  ${msg}`));
-}
-
-export function success(msg) {
-  console.log(colors.success(`  ${msg}`));
-}
-
-export function error(msg) {
-  console.error(colors.error(`  ${msg}`));
-}
-
-export function statusLine(msg) {
-  process.stdout.write(colors.dim(`\r  ${msg.padEnd(60)}\r`));
+export function printHelp() {
+  printBanner();
+  console.log(colors.text('  Usage: aristotle [topic]\n'));
+  console.log(colors.muted('  With a topic: starts building the breakdown immediately.'));
+  console.log(colors.muted('  Without a topic: opens a chat.'));
+  console.log(colors.muted('  -r / --resume [id]: resume a past session (picker if no id).\n'));
+  console.log(colors.muted('  In chat you can tag files with @path (autocomplete),'));
+  console.log(colors.muted('  use Ctrl+W / Option+Backspace to delete by word,'));
+  console.log(colors.muted('  Ctrl+R to resume a past session,'));
+  console.log(colors.muted('  and Ctrl+C to clear the input (press twice to exit).\n'));
+  console.log(colors.muted('  Examples:'));
+  console.log(colors.muted('    aristotle'));
+  console.log(colors.muted('    aristotle "machine learning"'));
+  console.log(colors.muted('    aristotle -r'));
+  console.log(colors.muted('    aristotle -r 20260101-120000-abcd\n'));
 }

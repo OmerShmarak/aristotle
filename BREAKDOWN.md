@@ -65,6 +65,23 @@ Then proceed to outline generation with this calibrated starting point.
 
 ## Part 1: Outline Generation
 
+### Naming the breakdown folder
+
+The engine started you in a placeholder cwd (`artifacts/run-<id>`). Once you know the real subject of the breakdown, emit a short name that the engine will use to rename the folder **after the build completes**:
+
+```
+%%ARISTOTLE_SLUG:<snake_case_name>%%
+```
+
+Rules:
+- **Maximum 3 words**, joined with underscores. Shorter is better.
+- Lowercase `a-z`, digits, and `_` only.
+- Pick the subject, not the request. Good: `piano_sight_reading`, `longevity`, `ww1_causes`. Bad: `help_me_learn_piano`.
+
+Emit this sentinel once, any time during the run (earliest reasonable spot is right after diagnosis). Do NOT try to write files to a different path — your cwd does not change during the run. The rename happens at the very end.
+
+### Outline template
+
 When the user provides a topic (e.g., "quantum mechanics", "web development", "music theory"), create a comprehensive outline following this template:
 
 ### Outline Structure
@@ -336,6 +353,8 @@ After writing (and optional refinement), compile all chapters into `breakdown.ht
 **Requirements**: pandoc must be installed. No LLM agent needed — this is a deterministic transformation.
 
 **Do NOT spawn an agent for compilation.** Just run the script.
+
+**Incremental rebuilds are cheap.** The script caches each chapter's HTML fragment under `<breakdown>/.build-cache/` and re-runs pandoc only when the source `.md` is newer. A full book rebuilds from cache in ~70ms; editing a single chapter and re-running costs ~120ms. In chat mode, when the user asks to tweak or rewrite a chapter, the right flow is: edit the `.md` file in place → re-run `{{PROJECT_ROOT}}/build-book.sh .` → emit `%%ARISTOTLE_DONE:breakdown.html%%`. No need to pre-clean anything. Pass `--force` only if you suspect the cache is stale for some non-mtime reason.
 
 ---
 

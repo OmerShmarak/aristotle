@@ -1,51 +1,80 @@
 #!/usr/bin/env node
 
 import { resolve, dirname } from 'path';
-import { readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import React from 'react';
 import { render } from 'ink';
 import { App } from '../ui/App.js';
 import { Engine } from '../lib/engine.js';
-import { createSession } from '../lib/session.js';
+import { createSession, sessionsDir, readMeta, updateMeta } from '../lib/session.js';
+import { listSessions, loadSessionMessages } from '../lib/sessions.js';
+import { getBannerText, printHelp } from '../lib/theme.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 
 // --- Parse args ---
-const rawArgs = process.argv.slice(2).filter(a => a !== '--debug');
-const topic = rawArgs.join(' ').trim();
-
-if (!topic || topic === '--help' || topic === '-h') {
-  // Show help without Ink
-  const { banner } = await import('../lib/theme.js');
-  banner();
-  const { colors } = await import('../lib/theme.js');
-  console.log(colors.text('  Usage: aristotle <topic>\n'));
-  console.log(colors.muted('  Examples:'));
-  console.log(colors.muted('    aristotle "machine learning"'));
-  console.log(colors.muted('    aristotle "quantum mechanics"'));
-  console.log(colors.muted('    aristotle "music theory"\n'));
-  process.exit(topic ? 0 : 1);
+const argv = process.argv.slice(2).filter(a => a !== '--debug');
+if (argv.includes('--help') || argv.includes('-h')) {
+  printHelp();
+  process.exit(0);
 }
 
-// --- Load banner text ---
-let bannerText = '';
-try {
-  bannerText = readFileSync(resolve(__dirname, '..', 'aristotle.txt'), 'utf-8');
-} catch { /* no art */ }
+let resumeRequested = false;
+let resumeId = null;
+const positional = [];
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === '-r' || a === '--resume') {
+    resumeRequested = true;
+    const next = argv[i + 1];
+    if (next && !next.startsWith('-')) {
+      resumeId = next;
+      i++;
+    }
+  } else {
+    positional.push(a);
+  }
+}
+const topic = positional.join(' ').trim() || null;
 
-// --- Compute breakdown output dir ---
-// Always write to PROJECT_ROOT/artifacts/<slug> so books live with the repo.
-// Claude Code's parent-walk will surface aristotle's CLAUDE.md into the inner
-// agent's context; the system prompt in engine.js tells it to ignore
-// leaked dev-facing instructions.
-const slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'breakdown';
-const breakdownDir = resolve(PROJECT_ROOT, 'artifacts', slug);
-mkdirSync(breakdownDir, { recursive: true });
+// --- Resolve resume target up-front (so -r <id> short-circuits the picker) ---
+let resumed = null;
+if (resumeRequested && resumeId) {
+  const meta = readMeta(sessionsDir(resumeId));
+  if (!meta) {
+    console.error(`Session not found: ${resumeId}`);
+    process.exit(1);
+  }
+  if (!meta.providerSessionId) {
+    console.error(`Session ${resumeId} has no provider resume token (was it ever sent?).`);
+    process.exit(1);
+  }
+  resumed = {
+    id: resumeId,
+    providerSessionId: meta.providerSessionId,
+    breakdownDir: meta.breakdownDir,
+    messages: loadSessionMessages(resumeId),
+  };
+}
 
-// --- Create session (for debug logs) ---
-const { id: sessionId, sessionDir } = createSession({ topic, breakdownDir });
+// --- Compute breakdown directory ---
+// On a fresh run we mint a placeholder. On resume we reuse the original
+// session's breakdown dir so the inner agent's cwd matches what it remembers.
+let breakdownDir;
+if (resumed?.breakdownDir && existsSync(resumed.breakdownDir)) {
+  breakdownDir = resumed.breakdownDir;
+} else {
+  breakdownDir = resolve(PROJECT_ROOT, 'artifacts', `run-${Date.now().toString(36)}`);
+  mkdirSync(breakdownDir, { recursive: true });
+}
+
+// --- Create session (debug logs always live in a fresh dir) ---
+const { id: sessionId, sessionDir } = createSession({
+  topic: topic || (resumed ? `(resumed ${resumed.id})` : '(chat)'),
+  breakdownDir,
+});
 
 // --- Init engine ---
 const engine = new Engine(PROJECT_ROOT, breakdownDir, sessionDir);
@@ -57,17 +86,30 @@ try {
   process.exit(1);
 }
 
-// Backfill claude version into meta.json now that we have it.
-try {
-  const metaPath = resolve(sessionDir, 'meta.json');
-  const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-  meta.claudeVersion = claudeVersion;
-  writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
-} catch { /* non-fatal */ }
+if (resumed) {
+  engine.setResume({
+    sessionId: resumed.providerSessionId,
+    breakdownDir: resumed.breakdownDir,
+  });
+}
+
+updateMeta(sessionDir, { claudeVersion });
 
 // --- Render TUI ---
 const e = React.createElement;
-render(e(App, { engine, banner: bannerText, topic, sessionId }), {
-  exitOnCtrlC: true,
+const bannerText = getBannerText();
+const filesRoot = resolve(PROJECT_ROOT, 'artifacts');
+
+render(e(App, {
+  engine,
+  banner: bannerText,
+  topic,
+  sessionId,
+  filesRoot,
+  initialMessages: resumed?.messages || null,
+  showPicker: resumeRequested && !resumed,
+  sessionsApi: { listSessions, loadSessionMessages },
+}), {
+  exitOnCtrlC: false,
   patchConsole: true,
 });

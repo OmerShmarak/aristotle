@@ -1,0 +1,9 @@
+{"delayMs": 0, "event": "turn_start", "payload": {}}
+{"delayMs": 0, "event": "phase", "payload": {"phase": "planning"}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Chapter approved. "}}
+{"delayMs": 50, "event": "text", "payload": {"text": "Writing now."}}
+{"delayMs": 10, "event": "status", "payload": {"message": "Designing the breakdown..."}}
+{"delayMs": 10, "event": "tool_start", "payload": {"toolName": "Write", "toolUseId": "toolu_bootstrap", "parentToolUseId": null}}
+{"delayMs": 10000, "event": "chapters_total", "payload": {"total": 1}}
+{"delayMs": 50, "event": "phase", "payload": {"phase": "writing"}}
+{"delayMs": 15000, "event": "__exit", "payload": {"code": 0}}

@@ -38,10 +38,17 @@ Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
 ### `lib/engine.js` — Conversation loop
 - Manages session state (sessionId for `--resume`)
 - Calls `claude -p` for each turn, resumes session for follow-ups
-- Builds the system prompt from BREAKDOWN.md + CLAUDE.md + PROFILE.md
+- Delegates prompt construction, sentinel parsing, permission-question parsing, and event logging to helper modules under `lib/engine/`
 - Emits high-level events for the UI to consume
 - Tracks phase: `planning` → `writing` → `idle`
 - Uses `task_started` only as an early hint that chapter work has begun; progress itself is sentinel-driven
+
+Supporting engine modules:
+- `lib/engine/system-prompt.js` — builds the appended system prompt
+- `lib/engine/sentinel-stream.js` — incremental sentinel extraction from streamed text
+- `lib/engine/permission-questions.js` — normalizes `AskUserQuestion` denials
+- `lib/engine/event-log.js` — JSONL event mirroring
+- `lib/engine/constants.js` — shared engine constants
 
 ### `lib/tracker.js` — Chapter progress (pure data)
 - Sentinel-driven: `setTotal(n)` and `markDone(id)` API
@@ -49,12 +56,12 @@ Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
 - Decouples progress from sub-agent counts, so chapter agents can fan out freely
 - No stdout writes — UI reads state via properties
 
-### `ui/App.js` — Ink TUI
-- React components rendered in the terminal via Ink
-- `<Static>` for scrollback (completed messages)
-- Live area: streaming text, spinner, progress bar, input
-- Text smoother: buffers tokens and drips them at steady rate for smooth rendering
-- Animations: spinner, pulsing text (nothing is ever static)
+### `ui/` — Ink TUI
+- `ui/App.js` is the composition root
+- `ui/hooks/useEngineState.js` projects engine events into UI state
+- `ui/hooks/useStreamingText.js` owns live assistant text buffering
+- `ui/components/*` contains presentational pieces such as transcript, banner, live panel, progress bar, spinner, and pulsing text
+- `ui/lib/input.js` owns answer normalization and `/probe-approval` parsing
 
 ### `lib/theme.js` — Colors and ASCII art
 - Warm earth tone palette
@@ -93,11 +100,14 @@ Each conversation turn is a separate process, linked via `--resume <sessionId>`.
 | File | Purpose |
 |------|---------|
 | `bin/aristotle.js` | Entry point |
-| `bin/demo.js` | Demo mode with mock engine (for testing rendering) |
 | `lib/claude.js` | Stream-json parser (translate raw → normalized events) |
 | `lib/engine.js` | Conversation loop + session management |
+| `lib/engine/` | Prompt/sentinel/question/logging helpers used by the engine |
 | `lib/tracker.js` | Chapter progress tracking (pure data) |
 | `lib/theme.js` | Colors, ASCII art loader |
-| `ui/App.js` | Ink TUI components |
+| `ui/App.js` | Ink TUI composition root |
+| `ui/hooks/` | UI state hooks |
+| `ui/components/` | Ink presentational components |
+| `ui/lib/` | UI-specific helpers |
 | `aristotle.txt` | ASCII art of Aristotle |
 | `test-tracker.js` | Unit tests for parser + tracker |

@@ -46,6 +46,7 @@ export function runClaude(prompt, opts = {}) {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    opts.onSpawn?.(proc);
 
     let sessionId = null;
     let result = '';
@@ -72,11 +73,12 @@ export function runClaude(prompt, opts = {}) {
     });
 
     proc.stderr.on('data', (chunk) => {
+      if (opts.isAborted?.()) return;
       const text = chunk.toString().trim();
       if (text) emit({ type: 'error', message: text });
     });
 
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
       // Flush remaining buffer
       if (buffer.trim()) {
         try {
@@ -87,6 +89,13 @@ export function runClaude(prompt, opts = {}) {
             if (e.type === 'result') { result = e.result; sessionId = e.sessionId || sessionId; }
           }
         } catch { /* ignore */ }
+      }
+
+      if (opts.isAborted?.() || signal === 'SIGINT') {
+        const err = new Error('Claude run interrupted');
+        err.code = 'ABORT_ERR';
+        reject(err);
+        return;
       }
 
       if (code !== 0 && code !== null) {

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "20260101-101010-aaaa",
+    "topic": "quantum mechanics",
+    "startedAt": "2026-04-25T10:00:00.000Z",
+    "providerSessionId": "provider-aaaa",
+    "breakdownDir": "/tmp/aristotle-test/qm",
+    "messages": [
+      { "id": 1, "role": "user", "text": "Teach me quantum mechanics" },
+      { "id": 2, "role": "assistant", "text": "RESUMED-QUANTUM-CHAPTER" }
+    ]
+  },
+  {
+    "id": "20260102-202020-bbbb",
+    "topic": "music theory",
+    "startedAt": "2026-04-26T08:00:00.000Z",
+    "providerSessionId": "provider-bbbb",
+    "breakdownDir": "/tmp/aristotle-test/music",
+    "messages": [
+      { "id": 1, "role": "user", "text": "Music theory please" },
+      { "id": 2, "role": "assistant", "text": "RESUMED-MUSIC-CHAPTER" }
+    ]
+  }
+]

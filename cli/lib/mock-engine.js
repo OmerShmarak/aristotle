@@ -19,6 +19,12 @@ export class MockEngine extends EventEmitter {
     super();
     this.scriptPath = scriptPath;
     this._started = false;
+    this._interrupted = false;
+    this._sleepTimer = null;
+    this._sleepResolve = null;
+    this._signalHandlers = {
+      interrupt: () => this._interruptReplay(),
+    };
   }
 
   async init() {
@@ -30,10 +36,17 @@ export class MockEngine extends EventEmitter {
     return 'mock';
   }
 
-  send(_message) {
+  send(message) {
+    this.emit('user_message', { text: message });
     if (this._started) return;
     this._started = true;
     this._replay();
+  }
+
+  setResume({ sessionId, breakdownDir } = {}) {
+    this.sessionId = sessionId;
+    this.breakdownDir = breakdownDir;
+    this._lastResume = { sessionId, breakdownDir };
   }
 
   probeApproval() {
@@ -42,9 +55,46 @@ export class MockEngine extends EventEmitter {
     this._replay();
   }
 
+  signal(name) {
+    return this._signalHandlers[name]?.() ?? false;
+  }
+
+  interrupt() {
+    return this.signal('interrupt');
+  }
+
+  _interruptReplay() {
+    if (!this._started || this._interrupted) return false;
+    this._interrupted = true;
+    if (this._sleepTimer) {
+      clearTimeout(this._sleepTimer);
+      this._sleepTimer = null;
+    }
+    if (this._sleepResolve) {
+      this._sleepResolve();
+      this._sleepResolve = null;
+    }
+    this.emit('status', { message: 'Interrupting...' });
+    this.emit('interrupted', { message: 'Interrupted current turn.' });
+    this.emit('phase', { phase: 'idle' });
+    this.emit('turn_end', {});
+    return true;
+  }
+
   async _replay() {
     for (const step of this._script) {
-      if (step.delayMs > 0) await new Promise(r => setTimeout(r, step.delayMs));
+      if (this._interrupted) return;
+      if (step.delayMs > 0) {
+        await new Promise((resolve) => {
+          this._sleepResolve = resolve;
+          this._sleepTimer = setTimeout(() => {
+            this._sleepTimer = null;
+            this._sleepResolve = null;
+            resolve();
+          }, step.delayMs);
+        });
+      }
+      if (this._interrupted) return;
       if (step.event === '__exit') {
         process.exit(step.payload?.code ?? 0);
       }

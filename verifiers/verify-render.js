@@ -18,18 +18,12 @@ const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
 const sharp = require('sharp');
+const { RENDERER_SCRIPTS, RENDERER_STYLES } = require('../cdn-scripts.js');
 
 function buildCdnTags() {
-  return [
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>',
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js"></script>',
-  ].join('\n');
+  const styles = RENDERER_STYLES.map((url) => `<link rel="stylesheet" href="${url}">`);
+  const scripts = RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`);
+  return [...styles, ...scripts].join('\n');
 }
 
 function buildHtml(breakdownDir, chapterFile) {
@@ -85,7 +79,14 @@ async function main() {
     await page.setViewport({ width: 1200, height: 800 });
 
     const jsErrors = [];
+    const requestFailures = [];
     page.on('pageerror', (err) => jsErrors.push(err.message));
+    page.on('requestfailed', (req) => {
+      // Ignore favicon noise; everything else is a real problem.
+      if (!/favicon/.test(req.url())) {
+        requestFailures.push(req.url() + ' — ' + req.failure().errorText);
+      }
+    });
 
     await page.goto('file://' + tmpFile, { waitUntil: 'networkidle0', timeout: 30000 });
     await new Promise((r) => setTimeout(r, 2000));
@@ -139,16 +140,31 @@ async function main() {
 
     await browser.close();
 
-    const failures = results.filter((v) => !v.rendered);
-    if (failures.length > 0) {
-      for (const v of failures) {
-        console.error(`  EMPTY: "${v.id}" — ${v.caption}`);
-      }
-      console.error(`FAIL: ${failures.length}/${results.length} visuals did not render.`);
-      process.exit(1);
+    let failed = false;
+
+    if (jsErrors.length > 0) {
+      console.error('JS errors during render (these usually mean your visual is broken):');
+      jsErrors.forEach((e) => console.error('  ' + e));
+      failed = true;
+    }
+    if (requestFailures.length > 0) {
+      console.error('Network request failures (CDN missing or unreachable):');
+      requestFailures.forEach((e) => console.error('  ' + e));
+      failed = true;
     }
 
-    console.log(`OK: ${results.length} visuals rendered.`);
+    const renderFailures = results.filter((v) => !v.rendered);
+    if (renderFailures.length > 0) {
+      for (const v of renderFailures) {
+        console.error(`  EMPTY: "${v.id}" — ${v.caption}`);
+      }
+      console.error(`FAIL: ${renderFailures.length}/${results.length} visuals did not render.`);
+      failed = true;
+    }
+
+    if (failed) process.exit(1);
+
+    console.log(`OK: ${results.length} visuals rendered, no JS errors.`);
     process.exit(0);
   } finally {
     if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
