@@ -39,13 +39,10 @@ if [ ! -d "$CHAPTERS_DIR" ]; then
   exit 1
 fi
 
-# All renderer CDN scripts (included unconditionally — unused scripts are harmless)
-CDN_SCRIPTS='<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>'
+# All renderer CDN scripts — single source of truth in cdn-scripts.js.
+# To add a new renderer script, edit cdn-scripts.js (see comments there).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CDN_SCRIPTS=$(node -e "console.log(require('$SCRIPT_DIR/cdn-scripts.js').BUILD_HEAD.join('\n'))")
 
 # Extract title from outline H1 if available, else use directory name
 if [ -f "$OUTLINE" ]; then

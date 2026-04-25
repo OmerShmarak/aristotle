@@ -63,6 +63,24 @@ Use unique IDs per diagram (e.g., `diagram-L03-overtones`).
 </script>
 ```
 
+## Verifier-friendly defaults
+
+The collision verifier checks whether drawn pixels exist underneath text labels. The most common failure pattern: a filled shape (especially Rough.js *hachure* fill) registers as drawing under a label placed inside or near the shape. After many sub-agent retrofits, here are the safe-by-default rules:
+
+1. **Stroke-only by default.** Don't pass `fill` to `rc.rectangle / circle / ellipse / polygon` unless the fill is essential. A stroked outline never collides with labels in the way hachure or solid fills do.
+2. **Labels go *outside* shapes, not inside.** If a box is labeled "Promoter," put the label above or below the box, not centered inside.
+3. **If a label *must* go inside a filled shape**, paint a small white-ish background rectangle under the label first:
+   ```javascript
+   var w = ctx.measureText(text).width;
+   ctx.fillStyle = '#faf8f4';     // page background color
+   ctx.fillRect(x - w/2 - 4, y - 12, w + 8, 18);
+   ctx.fillStyle = '#2c2c2c';
+   ctx.fillText(text, x, y);
+   ```
+4. **Avoid `roughjs` `fillStyle: 'hachure'` near labels.** Sparse strokes register as drawings under text. Use `fillStyle: 'solid'` with low opacity, or skip fill.
+5. **Comic Sans label width is unpredictable.** Leave 8–12 px of clearance around any label, not 4. Use `ctx.measureText(text).width` to get the actual width.
+6. **Test once with a representative chapter** before shipping a new diagram pattern. The verifier catches collisions reliably; trust its output and adjust.
+
 ## API Quick Reference
 
 ### Shapes

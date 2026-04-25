@@ -15,15 +15,12 @@ const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
 const sharp = require('sharp');
+const { RENDERER_SCRIPTS } = require('../cdn-scripts.js');
 
 const PADDING = 2; // px tolerance around text bbox
 
 function buildCdnTags() {
-  return [
-    '<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>',
-  ].join('\n');
+  return RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`).join('\n');
 }
 
 function buildHtml(chapterFile, disableText) {
@@ -98,6 +95,13 @@ async function renderPage(browser, htmlContent) {
   return { page, jsErrors };
 }
 
+function reportJsErrors(jsErrors, label) {
+  if (jsErrors.length === 0) return false;
+  console.error(`JS errors on ${label} (these usually mean your visual is broken):`);
+  jsErrors.forEach((e) => console.error('  ' + e));
+  return true;
+}
+
 // Extract raw pixel data for a region of a canvas
 async function getCanvasRegion(page, canvasId, bbox) {
   return page.evaluate(
@@ -155,7 +159,13 @@ async function main() {
   try {
     // Pass 1: normal render — collect text bounding boxes
     const normalHtml = buildHtml(chapterFile, false);
-    const { page: normalPage } = await renderPage(browser, normalHtml);
+    const { page: normalPage, jsErrors: errs1 } = await renderPage(browser, normalHtml);
+
+    if (reportJsErrors(errs1, 'normal render pass')) {
+      console.error('FAIL: JS errors detected — fix those before checking collisions.');
+      await browser.close();
+      process.exit(1);
+    }
 
     const canvasIds = await normalPage.evaluate(() => {
       return Array.from(document.querySelectorAll('canvas[id]')).map((c) => c.id);
