@@ -319,10 +319,23 @@ export class Engine extends EventEmitter {
     try {
       renameSync(this.breakdownDir, target);
       this.breakdownDir = target;
+      this._persistBreakdownDir();
       return target;
     } catch {
       return this.breakdownDir;
     }
+  }
+
+  // Persist the current breakdownDir to meta.json. Without this, a session
+  // whose dir got renamed to a topic slug keeps its stale `run-xxx` path in
+  // meta — and a later --resume hands a non-existent cwd to `claude -p`,
+  // which fails with ENOENT.
+  _persistBreakdownDir() {
+    if (!this.sessionDir) return;
+    if (this._inheritedResume) return;
+    try {
+      updateMeta(this.sessionDir, { breakdownDir: this.breakdownDir });
+    } catch { /* non-fatal */ }
   }
 
   _finishProbe() {

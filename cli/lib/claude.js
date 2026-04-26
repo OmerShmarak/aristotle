@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { appendFileSync } from 'fs';
+import { appendFileSync, existsSync } from 'fs';
 
 /**
  * Pure Claude Code CLI parser.
@@ -107,7 +107,16 @@ export function runClaude(prompt, opts = {}) {
 
     proc.on('error', (err) => {
       if (err.code === 'ENOENT') {
-        reject(new Error('Claude Code not installed. Run: npm install -g @anthropic-ai/claude-code'));
+        // ENOENT can mean either the binary is missing or the cwd doesn't
+        // exist. Check the cwd first — a stale meta.breakdownDir pointing at
+        // a renamed/deleted artifact dir is the more common cause once the
+        // user has Claude Code installed.
+        const cwd = opts.cwd || process.cwd();
+        if (!existsSync(cwd)) {
+          reject(new Error(`Working directory does not exist: ${cwd}`));
+        } else {
+          reject(new Error('Claude Code not installed. Run: npm install -g @anthropic-ai/claude-code'));
+        }
       } else {
         reject(err);
       }
