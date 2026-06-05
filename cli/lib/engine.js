@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { defaultProvider } from './providers/index.js';
-import { existsSync, renameSync } from 'fs';
+import { existsSync, symlinkSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { PROBE_APPROVAL_PROMPT } from './engine/constants.js';
 import { appendJsonLine, resetLog } from './engine/event-log.js';
@@ -41,7 +41,6 @@ export class Engine extends EventEmitter {
     this.sessionId = null;
     this.systemPrompt = null;
     this.phase = 'idle';
-    this._isDone = false;
     this._donePath = null;
     this._pendingQuestion = null;
     this._probeActive = false;
@@ -65,12 +64,12 @@ export class Engine extends EventEmitter {
     this._claudeLog = sessionDir ? resolve(sessionDir, 'claude.jsonl') : null;
     this._engineLog = sessionDir ? resolve(sessionDir, 'engine.jsonl') : null;
     resetLog(this._engineLog);
-    this._slug = null;
+    this._displayDir = null;
     this._sentinelStream = new SentinelStream({
       onChaptersTotal: (total) => this.emit('chapters_total', { total }),
       onChapterDone: (id) => this.emit('chapter_done', { id }),
       onDonePath: (path) => { this._donePath = path; },
-      onSlug: (slug) => { this._slug = slug; },
+      onSlug: (slug) => { this._ensureSlugLink(slug); },
       onText: (text) => this.emit('text', { text, parentToolUseId: null }),
       shouldEmitText: () => this.phase !== 'writing',
     });
@@ -173,14 +172,11 @@ export class Engine extends EventEmitter {
       }
 
       if (this._donePath) {
-        // Chat mode: emit `done` every time a build lands. The first emission
-        // also triggers the slug rename; subsequent emissions just report the
-        // updated artifact path (the cwd already has its final name).
-        const finalDir = this._slug && !this._isDone
-          ? this._renameBreakdownDir(this._slug)
-          : this.breakdownDir;
-        this._isDone = true;
-        const artifactPath = resolve(finalDir, this._donePath);
+        // Chat mode: emit `done` every time a build lands so the TUI updates
+        // its "open <path>" hint after each rebuild. Use the slug symlink if
+        // one was created — same file underneath, prettier path for the user.
+        const displayDir = this._displayDir || this.breakdownDir;
+        const artifactPath = resolve(displayDir, this._donePath);
         this.emit('done', { artifactPath });
       }
     } catch (err) {
@@ -297,7 +293,13 @@ export class Engine extends EventEmitter {
     }
   }
 
-  _renameBreakdownDir(rawSlug) {
+  // Create a sibling symlink `<slug> -> run-XXX` so the artifact can be
+  // opened at a topic-named path. We deliberately do NOT rename the cwd:
+  // Claude Code's `--resume <id>` validates the session against the cwd it
+  // was created in, and renaming the dir mid-conversation breaks resume
+  // permanently — even with metadata rewrites. Symlinks sidestep that.
+  _ensureSlugLink(rawSlug) {
+    if (this._displayDir) return;
     const sanitized = rawSlug
       .toLowerCase()
       .replace(/[^a-z0-9_]+/g, '_')
@@ -306,36 +308,19 @@ export class Engine extends EventEmitter {
       .filter(Boolean)
       .slice(0, 3)
       .join('_');
-    if (!sanitized) return this.breakdownDir;
+    if (!sanitized) return;
 
     const parent = dirname(this.breakdownDir);
     let target = resolve(parent, sanitized);
     let i = 2;
-    while (target !== this.breakdownDir && existsSync(target)) {
+    while (existsSync(target)) {
       target = resolve(parent, `${sanitized}_${i++}`);
     }
-    if (target === this.breakdownDir) return this.breakdownDir;
 
     try {
-      renameSync(this.breakdownDir, target);
-      this.breakdownDir = target;
-      this._persistBreakdownDir();
-      return target;
-    } catch {
-      return this.breakdownDir;
-    }
-  }
-
-  // Persist the current breakdownDir to meta.json. Without this, a session
-  // whose dir got renamed to a topic slug keeps its stale `run-xxx` path in
-  // meta — and a later --resume hands a non-existent cwd to `claude -p`,
-  // which fails with ENOENT.
-  _persistBreakdownDir() {
-    if (!this.sessionDir) return;
-    if (this._inheritedResume) return;
-    try {
-      updateMeta(this.sessionDir, { breakdownDir: this.breakdownDir });
-    } catch { /* non-fatal */ }
+      symlinkSync(this.breakdownDir, target);
+      this._displayDir = target;
+    } catch { /* non-fatal — `open` just falls back to the run-XXX path */ }
   }
 
   _finishProbe() {

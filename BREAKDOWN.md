@@ -67,7 +67,7 @@ Then proceed to outline generation with this calibrated starting point.
 
 ### Naming the breakdown folder
 
-The engine started you in a placeholder cwd (`artifacts/run-<id>`). Once you know the real subject of the breakdown, emit a short name that the engine will use to rename the folder **after the build completes**:
+The engine started you in a placeholder cwd (`artifacts/run-<id>`). Once you know the real subject of the breakdown, emit a short name that the engine will use to create a sibling **symlink** so the artifact can be opened at a topic-named path:
 
 ```
 %%ARISTOTLE_SLUG:<snake_case_name>%%
@@ -78,7 +78,7 @@ Rules:
 - Lowercase `a-z`, digits, and `_` only.
 - Pick the subject, not the request. Good: `piano_sight_reading`, `longevity`, `ww1_causes`. Bad: `help_me_learn_piano`.
 
-Emit this sentinel once, any time during the run (earliest reasonable spot is right after diagnosis). Do NOT try to write files to a different path — your cwd does not change during the run. The rename happens at the very end.
+Emit this sentinel once, any time during the run (earliest reasonable spot is right after diagnosis). Your cwd does NOT change — keep writing to relative paths. The symlink is purely for display so the final `open` command shows a nice path.
 
 ### Outline template
 
