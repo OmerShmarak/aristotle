@@ -2,7 +2,12 @@ import { EventEmitter } from 'events';
 import { defaultProvider } from './providers/index.js';
 import { existsSync, symlinkSync } from 'fs';
 import { dirname, resolve } from 'path';
-import { PROBE_APPROVAL_PROMPT } from './engine/constants.js';
+import {
+  PROBE_APPROVAL_PROMPT,
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_HARD_TIMEOUT_MS,
+  parseTimeoutMs,
+} from './engine/constants.js';
 import { appendJsonLine, resetLog } from './engine/event-log.js';
 import { extractQuestions } from './engine/permission-questions.js';
 import { SentinelStream } from './engine/sentinel-stream.js';
@@ -133,6 +138,10 @@ export class Engine extends EventEmitter {
       onSpawn: (proc) => { this._activeProc = proc; },
       isAborted: () => this._interruptRequested,
       permissionMode: 'auto',
+      // Bound every turn so a wedged subagent can't run for hours unnoticed
+      // (see DEFAULT_*_TIMEOUT_MS). Env overrides for big builds / debugging.
+      idleTimeoutMs: parseTimeoutMs(process.env.ARISTOTLE_IDLE_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS),
+      hardTimeoutMs: parseTimeoutMs(process.env.ARISTOTLE_TURN_TIMEOUT_MS, DEFAULT_HARD_TIMEOUT_MS),
       // Re-inject on every turn. Claude Code's `--resume` does NOT preserve
       // `--append-system-prompt` from the original invocation — verified
       // empirically: a pirate-persona system prompt on turn 1 was gone on
@@ -182,6 +191,21 @@ export class Engine extends EventEmitter {
     } catch (err) {
       if (err.code === 'ABORT_ERR') {
         this.emit('interrupted', { message: 'Interrupted current turn.' });
+        this._setPhase('idle');
+        this.emit('turn_end');
+        if (this._probeActive && !this._pendingQuestion) {
+          this._finishProbe();
+        }
+        return;
+      }
+      if (err.code === 'TIMEOUT_ERR') {
+        // A turn wedged (silent or runaway) and the watchdog killed it. Recover
+        // to idle like an interrupt rather than leaving the TUI spinning.
+        this.emit('error', {
+          message: `Turn aborted — ${err.message.replace(/^Claude run timed out: /, '')}. `
+            + 'Send another message to continue, or set ARISTOTLE_TURN_TIMEOUT_MS / '
+            + 'ARISTOTLE_IDLE_TIMEOUT_MS to adjust the limit.',
+        });
         this._setPhase('idle');
         this.emit('turn_end');
         if (this._probeActive && !this._pendingQuestion) {
@@ -245,7 +269,13 @@ export class Engine extends EventEmitter {
     if (!this._activeProc || this.phase === 'idle') return false;
     if (alreadyRequested) return false;
     beforeSend?.();
-    this._activeProc.kill(processSignal);
+    // claude runs in its own process group (spawned detached), so signal the
+    // group to also stop subagents / background bash; fall back to the leader.
+    try {
+      process.kill(-this._activeProc.pid, processSignal);
+    } catch {
+      try { this._activeProc.kill(processSignal); } catch { /* already gone */ }
+    }
     return true;
   }
 

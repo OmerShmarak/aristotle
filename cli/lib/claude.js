@@ -40,11 +40,28 @@ export function runClaude(prompt, opts = {}) {
   const emit = opts.onEvent || (() => {});
   // eventLog is opened in append mode — caller owns lifecycle (truncation).
 
+  // Watchdogs. A turn can wedge two ways: the process goes silent (a hung
+  // subagent — what burned 41h in session 20260530-171604-749a), or it keeps
+  // emitting but never finishes (a runaway loop). idleTimeoutMs guards the
+  // first, hardTimeoutMs the second. 0/null disables either. Callers (the
+  // engine) supply the real limits; defaults stay off so this stays a pure,
+  // Aristotle-agnostic wrapper.
+  const idleTimeoutMs = opts.idleTimeoutMs ?? 0;
+  const hardTimeoutMs = opts.hardTimeoutMs ?? 0;
+  // Grace between SIGTERM and the SIGKILL backstop, so claude can tear down
+  // its own subagents before we force the issue.
+  const KILL_GRACE_MS = 5000;
+
   return new Promise((resolve, reject) => {
     const proc = spawn('claude', args, {
       cwd: opts.cwd || process.cwd(),
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Own process group so a watchdog kill reaches claude's descendants
+      // (subagents, background bash) too — not just the leader. Without this,
+      // an orphaned grandchild can keep the stdout pipe open and 'close' never
+      // fires, which is exactly how a turn could hang indefinitely.
+      detached: true,
     });
     opts.onSpawn?.(proc);
 
@@ -52,7 +69,59 @@ export function runClaude(prompt, opts = {}) {
     let result = '';
     let buffer = '';
 
+    // Set once a watchdog fires; the close handler turns it into a
+    // TIMEOUT_ERR rejection instead of treating the kill as a normal exit.
+    let timedOutReason = null;
+    let idleTimer = null;
+    let hardTimer = null;
+    let killGraceTimer = null;
+
+    const clearTimers = () => {
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; }
+      if (killGraceTimer) { clearTimeout(killGraceTimer); killGraceTimer = null; }
+    };
+
+    // Signal the whole process group (negative pid) so descendants die with
+    // the leader; fall back to the leader alone if the group send fails.
+    const signalGroup = (sig) => {
+      try {
+        process.kill(-proc.pid, sig);
+      } catch {
+        try { proc.kill(sig); } catch { /* already gone */ }
+      }
+    };
+
+    const killForTimeout = (reason) => {
+      if (timedOutReason) return; // already firing
+      timedOutReason = reason;
+      clearTimers();
+      signalGroup('SIGTERM');
+      killGraceTimer = setTimeout(() => signalGroup('SIGKILL'), KILL_GRACE_MS);
+      killGraceTimer.unref?.();
+    };
+
+    const armIdle = () => {
+      if (!idleTimeoutMs) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(
+        () => killForTimeout(`no output for ${Math.round(idleTimeoutMs / 1000)}s`),
+        idleTimeoutMs,
+      );
+      idleTimer.unref?.();
+    };
+
+    if (hardTimeoutMs) {
+      hardTimer = setTimeout(
+        () => killForTimeout(`exceeded ${Math.round(hardTimeoutMs / 1000)}s time limit for this turn`),
+        hardTimeoutMs,
+      );
+      hardTimer.unref?.();
+    }
+    armIdle();
+
     proc.stdout.on('data', (chunk) => {
+      armIdle(); // any output means it's still alive — reset the idle clock
       buffer += chunk.toString();
       const lines = buffer.split('\n');
       buffer = lines.pop();
@@ -79,6 +148,8 @@ export function runClaude(prompt, opts = {}) {
     });
 
     proc.on('close', (code, signal) => {
+      clearTimers();
+
       // Flush remaining buffer
       if (buffer.trim()) {
         try {
@@ -89,6 +160,13 @@ export function runClaude(prompt, opts = {}) {
             if (e.type === 'result') { result = e.result; sessionId = e.sessionId || sessionId; }
           }
         } catch { /* ignore */ }
+      }
+
+      if (timedOutReason) {
+        const err = new Error(`Claude run timed out: ${timedOutReason}`);
+        err.code = 'TIMEOUT_ERR';
+        reject(err);
+        return;
       }
 
       if (opts.isAborted?.() || signal === 'SIGINT') {
@@ -106,6 +184,7 @@ export function runClaude(prompt, opts = {}) {
     });
 
     proc.on('error', (err) => {
+      clearTimers();
       if (err.code === 'ENOENT') {
         // ENOENT can mean either the binary is missing or the cwd doesn't
         // exist. Check the cwd first — a stale meta.breakdownDir pointing at

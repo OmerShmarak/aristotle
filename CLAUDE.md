@@ -31,6 +31,13 @@ Supporting files: `lib/tracker.js` (chapter progress counters), `lib/theme.js` (
 
 We wrap `claude -p` (one-shot per call) rather than the Claude API directly. Users authenticate via their Claude subscription — no API keys. Each turn is a separate process linked via `--resume <sessionId>`.
 
+Each turn's `claude` process is bounded by two watchdogs (a wedged subagent once ran a turn 41h before the user noticed). `claude` is spawned `detached` in its own process group so a kill reaches its subagents/background-bash too:
+
+- **Idle** — kill the turn if the process emits no output for `ARISTOTLE_IDLE_TIMEOUT_MS` (default 10 min). Catches a silently-hung subagent.
+- **Hard** — kill the turn after `ARISTOTLE_TURN_TIMEOUT_MS` total (default 60 min) regardless of activity. Backstop for a chatty runaway loop.
+
+Set either to `0`/`off` to disable. On a timeout the engine recovers to `idle` and emits an `error`; the user can send another message. Logic lives in `lib/claude.js` (generic) and the limits are supplied by `lib/engine.js`.
+
 ## Content pipeline
 
 `BREAKDOWN.md` is the full prompt for the inner Claude agent. It controls diagnosis, outline generation, chapter writing (parallel agents), and compilation.
