@@ -52,6 +52,30 @@ Set either to `0`/`off` to disable. On a timeout the engine recovers to `idle` a
 
 After `build-book.sh` runs, the inner Claude outputs `%%ARISTOTLE_DONE:<path>%%`. The engine strips this from display, emits a `done` event with the resolved artifact path, and the TUI shows the `open` command then exits.
 
+## Ask the book
+
+`aristotle serve <breakdown-dir>` serves a built book on localhost (default
+port 4517) with the "ask the book" widget active. The widget is vanilla JS in
+`book-assets/ask-widget.js`, appended into every `breakdown.html` by
+`build-book.sh` (via `cat`, never the heredoc — bash must not expand the JS).
+
+In the browser: select text → "Ask ✦" chip → inline panel. Two modes, one
+`POST /ask` SSE endpoint (`cli/lib/ask-server.js`):
+
+- **ask** — spawns `claude -p` with cwd = the book's *source* dir and
+  read-only tools (`Read,Grep,Glob`). No context is pushed; the agent decides
+  what to load (greps the selection to find the chapter file). Answers stream
+  into the panel.
+- **revise** — the reader's complaint goes to an agent allowed `Edit/Write`,
+  prompted to edit exactly one chapter's markdown and *not* build. The server
+  runs the incremental `build-book.sh` itself afterwards (~0.1s) and the page
+  reloads. One chapter per request.
+
+All asks share a rolling `--resume` session (follow-ups keep context) and run
+serially. The server binds 127.0.0.1 and rejects non-localhost origins.
+E2E coverage: `cli/tests/ask-book.e2e.test.js` (real browser via puppeteer,
+fake `claude` shim on PATH — deterministic and free).
+
 ## Debug sessions
 
 Every `aristotle` run mints a session ID (`YYYYMMDD-HHMMSS-xxxx`) and writes three files to `~/.aristotle/sessions/<id>/`:
@@ -113,11 +137,13 @@ directly.
 BREAKDOWN.md          # Inner agent prompt (the product)
 PROFILE.md            # Student profile (created on first run)
 build-book.sh         # Markdown → HTML compiler
+book-assets/          # ask-widget.js, injected into every built book
 skills/               # Rendering skill docs for chapter agents
 verifiers/            # Visual verification scripts
 cli/
-  bin/aristotle.js    # Entry point
+  bin/aristotle.js    # Entry point (TUI; `serve` subcommand for ask-the-book)
   lib/claude.js       # Stream-json parser
+  lib/ask-server.js   # Ask-the-book localhost server (ask + revise via claude -p)
   lib/engine.js       # Conversation loop + session mgmt
   lib/session.js      # Per-run debug session dir + meta.json
   lib/tracker.js      # Chapter progress tracking

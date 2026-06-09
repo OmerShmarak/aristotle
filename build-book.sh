@@ -434,9 +434,13 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 });
 </script>
-</body>
-</html>
 HTMLEOF
+
+# "Ask the book" widget — appended verbatim (cat, not heredoc) so bash never
+# expands $/backticks inside the JS. Served by `aristotle serve <dir>`.
+echo '<script>' >> "$OUTPUT"
+cat "$SCRIPT_DIR/book-assets/ask-widget.js" >> "$OUTPUT"
+printf '</%s>\n</body>\n</html>\n' 'script' >> "$OUTPUT"
 
 echo "Done: $OUTPUT ($NUM_CHAPTERS chapters, $REBUILT_COUNT rebuilt, $CACHED_COUNT cached)"
 echo "File size: $(du -h "$OUTPUT" | cut -f1)"
