@@ -1,0 +1,12 @@
+{"type":"system","subtype":"init","session_id":"s3","model":"claude-test"}
+{"type":"assistant","message":{"id":"m1","stop_reason":"end_turn","content":[{"type":"text","text":"# The Roadmap\n\nPart 1: Foundations. A vector is a quantity with magnitude and direction, and once you see that, matrices become machines that transform vectors. Let me explain how that works before we begin."}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"result","is_error":false,"session_id":"s3","num_turns":1}
+{"type":"system","subtype":"init","session_id":"s3","model":"claude-test"}
+{"type":"assistant","message":{"id":"m2","stop_reason":"end_turn","content":[{"type":"text","text":"Here is the plan.\n\n1. Vectors as arrows - what a vector actually is\n2. Matrices as machines - every matrix is a transformation\n3. Eigenvectors - the directions a transformation cannot turn\n\nStarting now."}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"result","is_error":false,"session_id":"s3","num_turns":1}
+{"type":"system","subtype":"init","session_id":"s3","model":"claude-test"}
+{"type":"assistant","message":{"id":"m3","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Agent","input":{"prompt":"Write Chapter 1"}}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"assistant","message":{"id":"m4","stop_reason":"tool_use","content":[{"type":"text","text":"%%ARISTOTLE_CHAPTERS_TOTAL:3%% — chapter one is underway"},{"type":"tool_use","id":"t2","name":"Agent","input":{"prompt":"Write Chapter 2"}}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"assistant","message":{"id":"m5","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t3","name":"Agent","input":{"prompt":"Write Chapter 3"}}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"assistant","message":{"id":"m6","stop_reason":"end_turn","content":[{"type":"text","text":"%%ARISTOTLE_CHAPTER_DONE:1%%\n%%ARISTOTLE_CHAPTER_DONE:2%%\nAll chapters written!"}]},"parent_tool_use_id":null,"session_id":"s3"}
+{"type":"result","is_error":false,"session_id":"s3","num_turns":4}

@@ -1,0 +1,6 @@
+{"type":"system","subtype":"init","session_id":"s2","model":"claude-test"}
+{"type":"assistant","message":{"id":"m1","stop_reason":"end_turn","content":[{"type":"text","text":"Before I plan this: have you written any Python before, and do you know what a probability distribution is?"}]},"parent_tool_use_id":null,"session_id":"s2"}
+{"type":"result","is_error":false,"session_id":"s2","num_turns":1}
+{"type":"system","subtype":"init","session_id":"s2","model":"claude-test"}
+{"type":"assistant","message":{"id":"m2","stop_reason":"end_turn","content":[{"type":"text","text":"%%ARISTOTLE_SLUG:diffusion_models%%\nGot it — starting from probability basics.\n\n1. Noise as information loss - what corrupting an image really does\n2. Distributions over images - why an image is a point in a huge space\n3. Learning to denoise - one small step backwards\n4. Sampling - walking from pure noise to a picture\n\nApproved?"}]},"parent_tool_use_id":null,"session_id":"s2"}
+{"type":"result","is_error":false,"session_id":"s2","num_turns":1}

@@ -1,0 +1,9 @@
+{
+  "name": "basic-technical",
+  "description": "Standard happy path: technical student, cooperative, states their boundary up front.",
+  "topic": "how garbage collection works",
+  "replies": [
+    "I'm a software engineer — I write Python daily, know C basics including malloc/free and pointers, but I've never read anything about GC internals. That's my whole background; please don't ask me more questions, just pick the starting point and show me the outline."
+  ],
+  "approval": "Approved — write the book."
+}

@@ -387,7 +387,7 @@ Your working directory IS the breakdown folder — the aristotle engine created 
 └── README.md                # Overview & reading order
 ```
 
-All renderer CDN scripts (KaTeX, Rough.js, Chart.js, VexFlow, JSXGraph) are hardcoded in `{{PROJECT_ROOT}}/build-book.sh` and mirrored in the three `{{PROJECT_ROOT}}/verifiers/*.js` files — no per-breakdown configuration needed. When adding a new renderer, update all four `buildCdnTags`/`CDN_SCRIPTS` blocks together.
+All renderer CDN scripts (KaTeX, Rough.js, Chart.js, VexFlow, JSXGraph) live in one place: `{{PROJECT_ROOT}}/cdn-scripts.js`. The build script and all four verifiers read from it — no per-breakdown configuration needed. When adding a new renderer, add its URL to `RENDERER_SCRIPTS` there and everything picks it up.
 
 ---
 

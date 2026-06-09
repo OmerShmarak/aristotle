@@ -3,3 +3,4 @@ PROFILE.md
 event-log.jsonl
 artifacts/
 cli/.tui-test/
+evals/runs/

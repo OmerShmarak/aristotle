@@ -1,0 +1,9 @@
+{
+  "name": "knows-a-lot",
+  "description": "Expert student: the outline must start high on the dependency chain instead of re-teaching prerequisites.",
+  "topic": "transformer attention",
+  "replies": [
+    "I've implemented backpropagation from scratch, I'm comfortable with linear algebra including eigendecompositions, and I've trained CNNs. I have not touched attention or transformers at all. That's everything — go ahead and show me the outline."
+  ],
+  "approval": "Approved."
+}
