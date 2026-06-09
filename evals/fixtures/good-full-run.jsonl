@@ -1,0 +1,17 @@
+{"type":"system","subtype":"init","session_id":"s1","model":"claude-test"}
+{"type":"assistant","message":{"id":"m1","stop_reason":null,"content":[{"type":"text","text":"Quick calibration: (a) Do you know what a derivative measures? (b) Have you multiplied two matrices by hand before?"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"result","is_error":false,"session_id":"s1","num_turns":1}
+{"type":"system","subtype":"init","session_id":"s1","model":"claude-test"}
+{"type":"assistant","message":{"id":"m2","stop_reason":null,"content":[{"type":"thinking","thinking":"plan the outline"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m2","stop_reason":null,"content":[{"type":"text","text":"%%ARISTOTLE_SLUG:linear_algebra%%\nSounds like you're solid on arithmetic but haven't met vectors — starting there.\n\n1. Vectors as arrows - what a vector actually is\n2. Matrices as machines - every matrix is a transformation\n3. Eigenvectors - the directions a transformation cannot turn\n\nApproved?"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"result","is_error":false,"session_id":"s1","num_turns":1}
+{"type":"system","subtype":"init","session_id":"s1","model":"claude-test"}
+{"type":"assistant","message":{"id":"m3","stop_reason":null,"content":[{"type":"text","text":"%%ARISTOTLE_CHAPTERS_TOTAL:3%%\n"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m3","stop_reason":null,"content":[{"type":"tool_use","id":"t1","name":"Agent","input":{"prompt":"Write Chapter 1 (Vectors as arrows)"}}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m3","stop_reason":null,"content":[{"type":"tool_use","id":"t2","name":"Agent","input":{"prompt":"Write Chapter 2 (Matrices as machines)"}}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m3","stop_reason":null,"content":[{"type":"tool_use","id":"t3","name":"Agent","input":{"prompt":"Write Chapter 3 (Eigenvectors)"}}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"sub1","stop_reason":null,"content":[{"type":"text","text":"# Chapter 1\n\nThis is subagent prose with headers — must NOT count as top-level teaching."}]},"parent_tool_use_id":"t1","session_id":"s1"}
+{"type":"assistant","message":{"id":"m4","stop_reason":null,"content":[{"type":"text","text":"%%ARISTOTLE_CHAPTER_DONE:1%%\n%%ARISTOTLE_CHAPTER_DONE:2%%\n%%ARISTOTLE_CHAPTER_DONE:3%%\n"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m4","stop_reason":null,"content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"bash /Users/omers/fun/aristotle/build-book.sh ."}}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"assistant","message":{"id":"m5","stop_reason":null,"content":[{"type":"text","text":"Compiled 3 chapters.\n%%ARISTOTLE_DONE:breakdown.html%%"}]},"parent_tool_use_id":null,"session_id":"s1"}
+{"type":"result","is_error":false,"session_id":"s1","num_turns":3}

@@ -52,6 +52,8 @@ Set either to `0`/`off` to disable. On a timeout the engine recovers to `idle` a
 
 After `build-book.sh` runs, the inner Claude outputs `%%ARISTOTLE_DONE:<path>%%`. The engine strips this from display, emits a `done` event with the resolved artifact path, and the TUI shows the `open` command then exits.
 
+If the model forgets/garbles the sentinel, the engine recovers from disk: at turn end, a `breakdown.html` whose mtime falls inside the turn triggers the same `done` event (`_recoverMissedDone` in `lib/engine.js`, covered by `cli/tests/done-fallback.test.js`).
+
 ## Debug sessions
 
 Every `aristotle` run mints a session ID (`YYYYMMDD-HHMMSS-xxxx`) and writes three files to `~/.aristotle/sessions/<id>/`:
@@ -107,14 +109,32 @@ project's default runtime). `brew install node@22` puts it at
 `/opt/homebrew/opt/node@22/bin/node`; the test file references that path
 directly.
 
+Plain-Node tests (`cli/tests/*.test.js`) are separate from tui-test — run
+each with `node cli/tests/<name>.test.js` on the default runtime.
+
+## Prompt evals
+
+The TUI suite covers rendering; `evals/` covers the other fragile asset —
+BREAKDOWN.md's protocol behaviour. `npm run eval:check -- <claude.jsonl>`
+checks any transcript (including past debug sessions) for violations:
+teaching in chat, skipped approval, serial agent spawning, missing/misplaced
+sentinels. `npm run eval` replays scripted student scenarios through real
+`claude -p` (cheap outline-only mode by default; `--through done` builds a
+real book). **Run evals after any change to BREAKDOWN.md or
+`cli/lib/engine/system-prompt.js`** — nothing else tests prompt behaviour.
+`npm run eval:test` (free, fixture-based) belongs in every test pass. See
+`evals/README.md`.
+
 ## File layout
 
 ```
 BREAKDOWN.md          # Inner agent prompt (the product)
 PROFILE.md            # Student profile (created on first run)
 build-book.sh         # Markdown → HTML compiler
+cdn-scripts.js        # Single source of truth for renderer CDN URLs (build + all verifiers)
 skills/               # Rendering skill docs for chapter agents
 verifiers/            # Visual verification scripts
+evals/                # BREAKDOWN.md protocol evals (checker + live runner)
 cli/
   bin/aristotle.js    # Entry point
   lib/claude.js       # Stream-json parser

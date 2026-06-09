@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { defaultProvider } from './providers/index.js';
-import { existsSync, symlinkSync } from 'fs';
+import { existsSync, statSync, symlinkSync } from 'fs';
 import { dirname, resolve } from 'path';
 import {
   PROBE_APPROVAL_PROMPT,
@@ -119,6 +119,7 @@ export class Engine extends EventEmitter {
    * Streams events via EventEmitter. Resolves when Claude finishes the turn.
    */
   async send(message) {
+    const turnStartMs = Date.now();
     this._setPhase('planning');
     this._sentinelStream.reset();
     this._donePath = null;
@@ -172,6 +173,8 @@ export class Engine extends EventEmitter {
 
       // Flush any remaining buffered text (may contain a trailing sentinel)
       this._sentinelStream.flush();
+
+      if (!this._donePath) this._recoverMissedDone(turnStartMs);
 
       this._setPhase('idle');
       this.emit('turn_end');
@@ -351,6 +354,22 @@ export class Engine extends EventEmitter {
       symlinkSync(this.breakdownDir, target);
       this._displayDir = target;
     } catch { /* non-fatal — `open` just falls back to the run-XXX path */ }
+  }
+
+  // The done sentinel is the only bridge between "book built on disk" and
+  // "TUI shows the open hint" — if the model forgets or garbles
+  // %%ARISTOTLE_DONE%%, the user stares at an idle prompt with a finished
+  // book sitting next to them. The disk is the ground truth: a
+  // breakdown.html modified during this turn means a build landed, sentinel
+  // or not. mtime gating keeps a prior turn's build from re-triggering the
+  // hint on an unrelated chat turn.
+  _recoverMissedDone(turnStartMs) {
+    try {
+      const artifact = resolve(this.breakdownDir, 'breakdown.html');
+      if (statSync(artifact).mtimeMs < turnStartMs) return;
+      this._donePath = 'breakdown.html';
+      this.emit('status', { message: 'Build detected without completion signal — recovering.' });
+    } catch { /* no artifact — nothing to recover */ }
   }
 
   _finishProbe() {

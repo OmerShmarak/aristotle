@@ -1,6 +1,11 @@
 {
   "name": "aristotle",
   "private": true,
+  "scripts": {
+    "eval": "node evals/run-evals.js",
+    "eval:check": "node evals/check-protocol.js",
+    "eval:test": "node evals/check-protocol.test.js"
+  },
   "dependencies": {
     "puppeteer": "^24.41.0",
     "sharp": "^0.34.5"
