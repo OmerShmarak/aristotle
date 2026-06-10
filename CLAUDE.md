@@ -59,20 +59,26 @@ port 4517) with the "ask the book" widget active. The widget is vanilla JS in
 `book-assets/ask-widget.js`, appended into every `breakdown.html` by
 `build-book.sh` (via `cat`, never the heredoc — bash must not expand the JS).
 
-In the browser: select text → "Ask ✦" chip → inline panel. Two modes, one
-`POST /ask` SSE endpoint (`cli/lib/ask-server.js`):
+In the browser: select text → "Ask ✦" chip → one inline chat panel. A single
+`POST /ask` SSE endpoint (`cli/lib/ask-server.js`) spawns `claude -p` with
+cwd = the book's *source* dir; the agent reads each message and decides
+whether it's a **question** (answer in prose) or a **change request** ("this
+opening is boring") — in which case it edits that one chapter's markdown and
+nothing else. The agent never builds: the server detects edits via an mtime
+scan after the turn, runs the incremental `build-book.sh` itself (~0.1s),
+and the page reloads.
 
-- **ask** — spawns `claude -p` with cwd = the book's *source* dir and
-  read-only tools (`Read,Grep,Glob`). No context is pushed; the agent decides
-  what to load (greps the selection to find the chapter file). Answers stream
-  into the panel.
-- **revise** — the reader's complaint goes to an agent allowed `Edit/Write`,
-  prompted to edit exactly one chapter's markdown and *not* build. The server
-  runs the incremental `build-book.sh` itself afterwards (~0.1s) and the page
-  reloads. One chapter per request.
+Context loading is dynamic per book, never hardcoded: the system prompt
+embeds the book's own `outline.md` (syllabus) and chapter-file listing, so
+most questions need zero file reads and chapter-specific ones exactly one.
+The panel shows a spinner + live tool activity (forwarded `tool_start`
+events) while the agent works, and a "+ New" button resets the rolling
+`--resume` session (`POST /reset`) for a clean context window.
 
-All asks share a rolling `--resume` session (follow-ups keep context) and run
-serially. The server binds 127.0.0.1 and rejects non-localhost origins.
+Requests run serially. The server binds 127.0.0.1 and rejects non-localhost
+origins. Export safety (HTML→EPUB/Kobo pipelines): the widget mounts ZERO UI
+unless `GET /health` answers, and `build-book.sh --no-ask-widget` omits the
+script entirely for conversion builds.
 E2E coverage: `cli/tests/ask-book.e2e.test.js` (real browser via puppeteer,
 fake `claude` shim on PATH — deterministic and free).
 

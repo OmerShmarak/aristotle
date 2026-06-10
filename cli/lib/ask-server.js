@@ -8,35 +8,34 @@
 //   GET  /            → breakdown.html
 //   GET  /health      → { ok, book }
 //   POST /ask         → SSE stream
-//        body { mode: 'ask'|'revise', question, selection, chapter:{id,title} }
+//        body { question, selection, chapter:{id,title} }
 //        events data: {type:'text'|'status'|'error'|'done', ...}
+//   POST /reset       → drop the rolling session (new conversation)
 //
-// Two modes:
-//   ask    — read-only tools (Read/Grep/Glob). Streamed prose answer.
-//   revise — the reader's complaint goes to an agent allowed to Edit/Write
-//            exactly one chapter's markdown. The agent does NOT build;
-//            the server runs the incremental build-book.sh afterwards
-//            (~0.1s) and the client reloads. One chapter per request.
+// One unified chat: the agent reads each message and decides whether it's a
+// question (answer from the pre-loaded syllabus + at most one chapter file)
+// or a change request ("fix this chapter") — in which case it edits that one
+// chapter's markdown in place. The agent never builds: the server detects
+// edits via an mtime scan after the turn, runs the incremental
+// build-book.sh itself (~0.1s), and the client reloads.
 //
-// All asks share one rolling claude session (--resume), so follow-ups keep
-// context ("what you suggested above"). Requests run serially — claude -p
-// resume is a single conversation.
+// All messages share one rolling claude session (--resume), so follow-ups
+// keep context ("what you suggested above"). /reset starts a fresh session.
+// Requests run serially — claude -p resume is a single conversation.
 //
 // Security posture: binds 127.0.0.1 only, and rejects browser origins other
 // than localhost/file so a random website can't drive your subscription.
 
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, extname, basename, sep } from 'node:path';
 import { spawn } from 'node:child_process';
 import { runClaude, checkClaude } from './claude.js';
 
 export const DEFAULT_ASK_PORT = 4517;
 
-const ASK_IDLE_MS = 3 * 60 * 1000;
-const ASK_HARD_MS = 6 * 60 * 1000;
-const REVISE_IDLE_MS = 4 * 60 * 1000;
-const REVISE_HARD_MS = 12 * 60 * 1000;
+const TURN_IDLE_MS = 4 * 60 * 1000;
+const TURN_HARD_MS = 12 * 60 * 1000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -50,42 +49,72 @@ const MIME = {
   '.md': 'text/plain; charset=utf-8',
 };
 
-function askSystemPrompt() {
-  return `You are the "ask the book" assistant behind an aristotle breakdown — a generated HTML textbook the reader is viewing in their browser right now.
+// Per-book context baked into every system prompt, read fresh per request
+// (cheap: one small file + a readdir; and revisions may change it). Nothing
+// is hardcoded — whatever book the server points at supplies its own
+// syllabus. With the syllabus pre-loaded, most questions need zero file
+// reads, and chapter-specific ones need exactly one.
+const OUTLINE_CAP = 12000;
 
-Your cwd is the book's source directory: outline.md is the master plan, chapters/*.md (NN-slug.md, ordered) are the chapter sources.
+function bookContext(root) {
+  let chapters = [];
+  try {
+    chapters = readdirSync(join(root, 'chapters')).filter((f) => f.endsWith('.md')).sort();
+  } catch { /* no chapters dir */ }
+  let outline = '';
+  try {
+    outline = readFileSync(join(root, 'outline.md'), 'utf8');
+    if (outline.length > OUTLINE_CAP) outline = outline.slice(0, OUTLINE_CAP) + '\n…(outline truncated)';
+  } catch { /* no outline */ }
 
-The reader selected a passage and asked a question about it. Decide yourself what context you need — usually the chapter the passage came from (Grep a distinctive phrase from the selection to find the file), sometimes the outline or a neighbouring chapter. Load only what you need; don't read the whole book for a local question.
+  const listing = chapters.length
+    ? `Chapter source files, in reading order (the HTML section id #ch-NN maps to the NNth file here):\n${chapters.map((f, i) => `  ${i + 1}. chapters/${f}`).join('\n')}`
+    : 'No chapters/ directory found.';
 
-Answer rules:
+  return `# This book
+
+Your cwd is this book's source directory.
+${listing}
+
+${outline ? `# Syllabus (outline.md — already loaded for you, do NOT re-read it)\n\n${outline}` : 'There is no outline.md.'}`;
+}
+
+function systemPrompt(root) {
+  return `You are the assistant living inside an aristotle breakdown — a generated HTML textbook the reader is viewing in their browser right now. They talk to you from a small side panel; each message may carry a passage they selected and the chapter it came from.
+
+${bookContext(root)}
+
+# Your job
+
+Each message is one of two things — read it and decide:
+
+**1. A question** (about the selection, a chapter, the book). Answer FAST with minimal context:
+- The syllabus above plus the quoted selection are often enough — when they are, answer immediately with NO tool calls.
+- When you need detail, Read exactly the one chapter file involved (map the chapter named in the request to its file using the listing above). Only reach for a second file if the question explicitly spans chapters.
+- Never read the whole book for a local question.
 - Answer directly, in plain prose. No preamble, no "Great question", no headers.
-- Match the book's level and terminology. The reader has read up to the chapter they're asking from — don't lean on concepts from later chapters.
+- Match the book's level and terminology — the reader has read up to the chapter they're asking from; don't lean on concepts from later chapters.
 - If the passage is genuinely ambiguous or wrong, say so plainly.
-- Keep it tight: a few sentences up to a few short paragraphs. This renders in a small side panel.`;
-}
+- Keep it tight: a few sentences up to a few short paragraphs. This renders in a small side panel.
 
-function reviseSystemPrompt() {
-  return `You are the revision assistant behind an aristotle breakdown — a generated HTML textbook. The reader just complained about a chapter and wants it fixed fast.
-
-Your cwd is the book's source directory: outline.md is the master plan, chapters/*.md (NN-slug.md, ordered) are the chapter sources.
-
-Your job: edit that ONE chapter's markdown file in place to address the complaint, then stop.
-
-Hard rules:
-- Edit ONLY the chapter named in the request. Find its file in chapters/ by number/title. Do not touch other chapters, outline.md, or anything else.
-- Keep the chapter's role in the dependency chain: same concepts covered, same links to previous/next chapters, stay within 2000-4000 words.
-- Do NOT run build scripts or verifiers — the server rebuilds automatically the moment you finish. Speed matters; just edit.
+**2. A change request** ("fix this chapter", "this part is boring, punch it up", "add a concrete example here", "this explanation is wrong"). Edit the book:
+- Edit ONLY the one chapter file involved — the chapter attached to the message, or the one the reader names. Map it to its file via the listing above; don't search around. Never touch other chapters or outline.md.
+- Keep the chapter's role in the dependency chain (the syllabus shows it): same concepts covered, same links to previous/next chapters, stay within 2000-4000 words.
+- Scope the edit to the complaint — a gripe about the opening rewrites the opening, not the chapter.
+- Do NOT run build scripts or verifiers — the server detects your edits and rebuilds automatically the moment you finish. Speed matters; just edit.
 - Keep existing visuals (canvas/JSXGraph/Chart.js blocks) unless the complaint is about them; do not add new ones (they can't be verified here).
-- While working, narrate briefly (one short line per step). End with one sentence summarizing what you changed.`;
+- Narrate briefly while working (one short line per step) and end with one sentence summarizing what you changed.
+
+If a message is ambiguous between the two, treat it as a question and offer the edit ("want me to rewrite it that way?").`;
 }
 
-function buildPrompt({ mode, question, selection, chapter }) {
+function buildPrompt({ question, selection, chapter }) {
   const parts = [];
   if (chapter?.title) parts.push(`Chapter: ${chapter.title}${chapter.id ? ` (section #${chapter.id})` : ''}`);
   if (selection) {
     parts.push(`Selected passage:\n"""\n${selection.slice(0, 3000)}\n"""`);
   }
-  parts.push(mode === 'revise' ? `Reader's complaint: ${question}` : `Question: ${question}`);
+  parts.push(`Reader's message: ${question}`);
   return parts.join('\n\n');
 }
 
@@ -137,6 +166,16 @@ export function startAskServer({ breakdownDir, projectRoot, port = DEFAULT_ASK_P
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/reset') {
+      // New conversation: drop the rolling resume token. The next ask starts
+      // a fresh claude session with a clean context window.
+      session.id = null;
+      res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
+      res.end(JSON.stringify({ ok: true }));
+      log('[ask-server] conversation reset');
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/ask') {
       let body;
       try {
@@ -145,7 +184,6 @@ export function startAskServer({ breakdownDir, projectRoot, port = DEFAULT_ASK_P
         res.writeHead(400, cors).end('bad json');
         return;
       }
-      const mode = body.mode === 'revise' ? 'revise' : 'ask';
       const question = String(body.question || '').trim();
       if (!question) {
         res.writeHead(400, cors).end('missing question');
@@ -161,7 +199,7 @@ export function startAskServer({ breakdownDir, projectRoot, port = DEFAULT_ASK_P
       const sse = (ev) => { try { res.write(`data: ${JSON.stringify(ev)}\n\n`); } catch { /* client gone */ } };
 
       // Serialize: one claude conversation, one turn at a time.
-      queue = queue.then(() => handleTurn({ mode, body, question, sse }))
+      queue = queue.then(() => handleTurn({ body, question, sse }))
         .catch((err) => sse({ type: 'error', message: err.message }))
         .finally(() => { sse({ type: 'done', rebuilt: false }); res.end(); });
       return;
@@ -174,26 +212,30 @@ export function startAskServer({ breakdownDir, projectRoot, port = DEFAULT_ASK_P
     res.writeHead(405, cors).end();
   });
 
-  async function handleTurn({ mode, body, question, sse }) {
+  async function handleTurn({ body, question, sse }) {
     const prompt = buildPrompt({
-      mode,
       question,
       selection: String(body.selection || ''),
       chapter: body.chapter && typeof body.chapter === 'object' ? body.chapter : null,
     });
-    log(`[ask-server] ${mode}: ${question.slice(0, 80)}`);
+    log(`[ask-server] ask: ${question.slice(0, 80)}`);
+    const turnStartMs = Date.now();
 
     const opts = {
       cwd: root,
-      appendSystemPrompt: mode === 'revise' ? reviseSystemPrompt() : askSystemPrompt(),
-      allowedTools: mode === 'revise'
-        ? ['Read', 'Grep', 'Glob', 'Edit', 'Write']
-        : ['Read', 'Grep', 'Glob'],
+      appendSystemPrompt: systemPrompt(root),
+      // One unified turn: the agent decides whether this is a question or a
+      // change request. Edit/Write are scoped by prompt to one chapter; the
+      // mtime scan below tells us whether anything actually changed.
+      allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write'],
       permissionMode: 'auto',
-      idleTimeoutMs: mode === 'revise' ? REVISE_IDLE_MS : ASK_IDLE_MS,
-      hardTimeoutMs: mode === 'revise' ? REVISE_HARD_MS : ASK_HARD_MS,
+      idleTimeoutMs: TURN_IDLE_MS,
+      hardTimeoutMs: TURN_HARD_MS,
       onEvent: (e) => {
         if (e.type === 'text' && !e.parentToolUseId) sse({ type: 'text', text: e.text });
+        // Surface tool activity so the panel can show what's happening during
+        // silent stretches (reading / editing takes a while with no text).
+        if (e.type === 'tool_start' && !e.parentToolUseId) sse({ type: 'tool', name: e.toolName });
         if (e.type === 'result' && !e.ok) sse({ type: 'error', message: `claude error: ${e.subtype || 'unknown'}` });
       },
     };
@@ -202,12 +244,27 @@ export function startAskServer({ breakdownDir, projectRoot, port = DEFAULT_ASK_P
     const { sessionId } = await runClaude(prompt, opts);
     if (sessionId) session.id = sessionId;
 
-    if (mode === 'revise') {
+    if (sourcesChangedSince(turnStartMs)) {
       sse({ type: 'status', message: 'Rebuilding the book…' });
       await rebuild();
       sse({ type: 'done', rebuilt: true });
-      log('[ask-server] rebuilt after revision');
+      log('[ask-server] sources changed — rebuilt');
     }
+  }
+
+  // Did the agent edit the book this turn? Ground truth is the disk: any
+  // chapter markdown (or outline.md) with an mtime inside the turn.
+  function sourcesChangedSince(sinceMs) {
+    const candidates = [];
+    try {
+      for (const f of readdirSync(join(root, 'chapters'))) {
+        if (f.endsWith('.md')) candidates.push(join(root, 'chapters', f));
+      }
+    } catch { /* no chapters dir */ }
+    candidates.push(join(root, 'outline.md'));
+    return candidates.some((f) => {
+      try { return statSync(f).mtimeMs >= sinceMs; } catch { return false; }
+    });
   }
 
   function rebuild() {

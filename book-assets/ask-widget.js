@@ -2,19 +2,26 @@
 //
 // Injected into breakdown.html by build-book.sh (appended inside a <script>
 // tag, so this file must not contain a closing script tag sequence).
+// Build with --no-ask-widget to omit it entirely (e.g. for exports).
 //
 // What it does:
 //   - Select any text in the book → a floating "Ask" chip appears.
-//   - Click it (or the ✦ launcher, bottom-right) → an inline panel opens in
-//     the same window with the selection quoted.
-//   - Ask a question → streamed answer from `claude -p` running against the
-//     book's source markdown (served by `aristotle serve <book-dir>`).
-//   - Or hit "Fix chapter" with a complaint → an agent edits that chapter's
-//     markdown in place, the server rebuilds the book, the page reloads.
+//   - Click it (or the ✦ launcher, bottom-right) → an inline chat panel
+//     opens in the same window with the selection + chapter attached.
+//   - One input, one agent: ask a question and get a streamed answer, or
+//     tell it to fix the chapter ("this opening is boring") — it edits the
+//     chapter's markdown, the server rebuilds, and the page reloads.
+//   - "New" starts a fresh conversation (clears the agent's context window).
+//
+// IMPORTANT — exported/converted books (EPUB, Kobo, print): this widget
+// mounts NOTHING until the ask server answers GET /health. No server →
+// no DOM nodes, no styles, zero visual footprint. Conversions that strip
+// scripts lose it entirely; conversions that keep scripts still render a
+// clean book.
 //
 // Server discovery: same origin when the book is served over http (the
 // normal `aristotle serve` flow); falls back to http://127.0.0.1:4517 when
-// opened as file:// so the widget still works next to a running server.
+// opened as file:// next to a running server.
 (function () {
   'use strict';
 
@@ -22,6 +29,29 @@
   var API = (location.protocol === 'http:' || location.protocol === 'https:')
     ? ''
     : 'http://127.0.0.1:' + DEFAULT_PORT;
+
+  // ---------- gate: mount only if the ask server is actually there ----------
+  function probe(timeoutMs) {
+    return new Promise(function (resolveProbe) {
+      var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timer = setTimeout(function () {
+        if (ctl) ctl.abort();
+        resolveProbe(false);
+      }, timeoutMs);
+      fetch(API + '/health', { signal: ctl && ctl.signal })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { clearTimeout(timer); resolveProbe(!!(j && j.ok)); })
+        .catch(function () { clearTimeout(timer); resolveProbe(false); });
+    });
+  }
+
+  try {
+    probe(2500).then(function (ok) {
+      if (ok) mount();
+    }).catch(function () { /* never break the book */ });
+  } catch (e) { /* ancient engine — book renders fine without us */ }
+
+  function mount() {
 
   var state = {
     selection: null,   // { text, chapter: {id, title} }
@@ -44,14 +74,22 @@
     + 'font:14px/1.5 -apple-system,Helvetica,Arial,sans-serif;color:#2c2c2c}'
     + '.arq-head{display:flex;align-items:center;gap:.5rem;padding:.6rem .9rem;border-bottom:1px solid #e0dcd4}'
     + '.arq-title{font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#6b6b6b}'
-    + '.arq-chapter{font-size:12px;color:#8b4513;margin-left:auto;max-width:55%;overflow:hidden;'
+    + '.arq-chapter{font-size:12px;color:#8b4513;margin-left:auto;max-width:48%;overflow:hidden;'
     + 'text-overflow:ellipsis;white-space:nowrap}'
+    + '.arq-new{border:1px solid #e0dcd4;background:none;border-radius:6px;font-size:11.5px;cursor:pointer;'
+    + 'color:#6b6b6b;padding:.15rem .5rem}'
+    + '.arq-new:hover{color:#8b4513;border-color:#c4a87c}'
     + '.arq-close{border:none;background:none;font-size:17px;cursor:pointer;color:#6b6b6b;padding:0 .2rem}'
     + '.arq-log{overflow-y:auto;padding:.7rem .9rem;flex:1;min-height:60px}'
-    + '.arq-q{margin:.4rem 0;padding:.45rem .7rem;background:#f0ede6;border-radius:8px;white-space:pre-wrap}'
-    + '.arq-a{margin:.4rem 0 .8rem;padding:.1rem .1rem;white-space:pre-wrap}'
+    + '.arq-ctx{font-size:11px;color:#9b9b9b;margin:.5rem 0 0}'
+    + '.arq-q{margin:.15rem 0 .4rem;padding:.45rem .7rem;background:#f0ede6;border-radius:8px;white-space:pre-wrap}'
+    + '.arq-a{margin:.4rem 0 .8rem;white-space:pre-wrap}'
     + '.arq-a.arq-streaming:after{content:"▋";color:#8b4513;animation:arqblink 1s infinite}'
     + '@keyframes arqblink{50%{opacity:0}}'
+    + '.arq-busy{display:flex;align-items:center;gap:.55rem;margin:.3rem 0 .6rem;color:#6b6b6b;font-size:12.5px}'
+    + '.arq-spin{width:14px;height:14px;border:2px solid #e0dcd4;border-top-color:#8b4513;border-radius:50%;'
+    + 'animation:arqspin .8s linear infinite;flex:none}'
+    + '@keyframes arqspin{to{transform:rotate(360deg)}}'
     + '.arq-err{color:#a33;margin:.4rem 0;white-space:pre-wrap}'
     + '.arq-status{color:#6b6b6b;font-style:italic;margin:.3rem 0}'
     + '.arq-sel{margin:.5rem .9rem 0;padding:.4rem .7rem;border-left:3px solid #c4a87c;background:rgba(0,0,0,.02);'
@@ -60,10 +98,9 @@
     + '.arq-input{display:flex;gap:.5rem;padding:.7rem .9rem;border-top:1px solid #e0dcd4;align-items:flex-end}'
     + '.arq-ta{flex:1;resize:none;border:1px solid #e0dcd4;border-radius:7px;padding:.45rem .6rem;'
     + 'font:14px/1.4 -apple-system,Helvetica,Arial,sans-serif;background:#fff;min-height:34px;max-height:120px}'
-    + '.arq-btn{border:none;border-radius:7px;padding:.45rem .8rem;cursor:pointer;font-size:13px;font-weight:600}'
+    + '.arq-btn{border:none;border-radius:7px;padding:.45rem .9rem;cursor:pointer;font-size:13px;font-weight:600;'
+    + 'background:#8b4513;color:#faf8f4}'
     + '.arq-btn[disabled]{opacity:.5;cursor:default}'
-    + '.arq-ask{background:#8b4513;color:#faf8f4}'
-    + '.arq-fix{background:#f0ede6;color:#6d3610}'
     + '.arq-hint{padding:0 .9rem .55rem;font-size:11.5px;color:#9b9b9b}'
     + '.arq-toast{position:fixed;left:50%;top:1rem;transform:translateX(-50%);z-index:10001;background:#2c2c2c;'
     + 'color:#faf8f4;padding:.5rem 1rem;border-radius:8px;font:13px -apple-system,Helvetica,Arial,sans-serif;'
@@ -93,24 +130,24 @@
   panel.setAttribute('data-aristotle-ask', 'panel');
   var head = el('div', 'arq-head');
   var chapterLabel = el('span', 'arq-chapter', '');
+  var newBtn = el('button', 'arq-new', '+ New');
+  newBtn.title = 'Start a fresh conversation (clears the assistant’s context)';
   var closeBtn = el('button', 'arq-close', '×');
   head.appendChild(el('span', 'arq-title', 'Ask the book'));
   head.appendChild(chapterLabel);
+  head.appendChild(newBtn);
   head.appendChild(closeBtn);
   var selBox = el('div', 'arq-sel');
   selBox.style.display = 'none';
   var log = el('div', 'arq-log');
   var inputRow = el('div', 'arq-input');
   var ta = el('textarea', 'arq-ta');
-  ta.placeholder = 'Ask about the selection, or complain to fix the chapter…';
+  ta.placeholder = 'Ask anything — or tell me to fix this chapter…';
   ta.rows = 1;
-  var askBtn = el('button', 'arq-btn arq-ask', 'Ask');
-  var fixBtn = el('button', 'arq-btn arq-fix', 'Fix chapter');
-  fixBtn.title = 'Send your complaint to an agent that rewrites this chapter and rebuilds the book';
+  var sendBtn = el('button', 'arq-btn', 'Send');
   inputRow.appendChild(ta);
-  inputRow.appendChild(askBtn);
-  inputRow.appendChild(fixBtn);
-  var hint = el('div', 'arq-hint', 'Enter to ask · Shift+Enter for newline · Esc to close');
+  inputRow.appendChild(sendBtn);
+  var hint = el('div', 'arq-hint', 'Enter to send · Shift+Enter for newline · Esc to close. Edits rebuild the book and reload the page.');
   panel.appendChild(head);
   panel.appendChild(selBox);
   panel.appendChild(log);
@@ -214,18 +251,47 @@
   }
   closeBtn.addEventListener('click', closePanel);
 
+  // ---------- new conversation ----------
+  newBtn.addEventListener('click', function () {
+    if (state.busy) return;
+    fetch(API + '/reset', { method: 'POST' }).catch(function () { /* server gone; next send will surface it */ });
+    log.textContent = '';
+    selBox.style.display = 'none';
+    if (state.selection) state.selection.text = '';
+    log.appendChild(el('div', 'arq-status', 'New conversation — context cleared.'));
+    ta.focus();
+  });
+
   // ---------- transport ----------
-  function send(mode) {
+  var TOOL_LABELS = {
+    Read: 'Reading the chapter…',
+    Grep: 'Searching the book…',
+    Glob: 'Searching the book…',
+    Edit: 'Editing the chapter…',
+    Write: 'Editing the chapter…',
+  };
+
+  function send() {
     if (state.busy) return;
     var text = ta.value.trim();
     if (!text) return;
     var sel = state.selection || { text: '', chapter: chapterInView() };
 
     state.busy = true;
-    askBtn.disabled = fixBtn.disabled = true;
+    sendBtn.disabled = true;
     ta.value = '';
 
-    log.appendChild(el('div', 'arq-q', (mode === 'revise' ? '✎ ' : '') + text));
+    if (sel.chapter && sel.chapter.title) {
+      log.appendChild(el('div', 'arq-ctx', 're: ' + sel.chapter.title));
+    }
+    log.appendChild(el('div', 'arq-q', text));
+
+    var busyRow = el('div', 'arq-busy');
+    busyRow.appendChild(el('div', 'arq-spin'));
+    var busyText = el('span', null, 'Thinking…');
+    busyRow.appendChild(busyText);
+    log.appendChild(busyRow);
+
     var answer = el('div', 'arq-a arq-streaming');
     log.appendChild(answer);
     log.scrollTop = log.scrollHeight;
@@ -234,7 +300,6 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: mode,
         question: text,
         selection: sel.text || '',
         chapter: sel.chapter || null,
@@ -246,7 +311,7 @@
       var buf = '';
       function pump() {
         return reader.read().then(function (r) {
-          if (r.done) { finish(null); return; }
+          if (r.done) { finish(); return; }
           buf += decoder.decode(r.value, { stream: true });
           var parts = buf.split('\n\n');
           buf = parts.pop();
@@ -255,7 +320,7 @@
             if (!line) return;
             var ev;
             try { ev = JSON.parse(line.slice(6)); } catch (e) { return; }
-            handleEvent(ev, answer);
+            handleEvent(ev);
           });
           log.scrollTop = log.scrollHeight;
           return pump();
@@ -263,44 +328,47 @@
       }
       return pump();
     }).catch(function (err) {
-      answer.classList.remove('arq-streaming');
       var msg = (API === '')
         ? 'Lost the ask server: ' + err.message
         : 'Can’t reach the ask server (' + err.message + ').\nStart it with:  aristotle serve <this book’s folder>';
       log.appendChild(el('div', 'arq-err', msg));
-      finish(err);
+      finish();
     });
+
+    function handleEvent(ev) {
+      if (ev.type === 'text') {
+        answer.textContent += ev.text;
+        busyText.textContent = 'Working…';
+      } else if (ev.type === 'tool') {
+        busyText.textContent = TOOL_LABELS[ev.name] || (ev.name + '…');
+      } else if (ev.type === 'status') {
+        busyText.textContent = ev.message;
+      } else if (ev.type === 'error') {
+        log.appendChild(el('div', 'arq-err', ev.message));
+      } else if (ev.type === 'done') {
+        if (ev.rebuilt) {
+          // Outlives the busy row (which finish() removes when the stream closes).
+          log.appendChild(el('div', 'arq-status', 'Chapter rebuilt — reloading…'));
+          try { sessionStorage.setItem('arq-revised', '1'); } catch (e) { /* private mode */ }
+          setTimeout(function () { location.reload(); }, 900);
+        }
+      }
+    }
 
     function finish() {
       answer.classList.remove('arq-streaming');
+      busyRow.remove();
       state.busy = false;
-      askBtn.disabled = fixBtn.disabled = false;
+      sendBtn.disabled = false;
       log.scrollTop = log.scrollHeight;
     }
   }
 
-  function handleEvent(ev, answer) {
-    if (ev.type === 'text') {
-      answer.textContent += ev.text;
-    } else if (ev.type === 'status') {
-      log.insertBefore(el('div', 'arq-status', ev.message), answer.nextSibling);
-    } else if (ev.type === 'error') {
-      log.appendChild(el('div', 'arq-err', ev.message));
-    } else if (ev.type === 'done') {
-      if (ev.rebuilt) {
-        log.appendChild(el('div', 'arq-status', 'Chapter rebuilt — reloading…'));
-        try { sessionStorage.setItem('arq-revised', '1'); } catch (e) { /* private mode */ }
-        setTimeout(function () { location.reload(); }, 900);
-      }
-    }
-  }
-
-  askBtn.addEventListener('click', function () { send('ask'); });
-  fixBtn.addEventListener('click', function () { send('revise'); });
+  sendBtn.addEventListener('click', send);
   ta.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      send('ask');
+      send();
     }
   });
 
@@ -313,4 +381,6 @@
       setTimeout(function () { toast.remove(); }, 3500);
     }
   } catch (e) { /* private mode */ }
+
+  } // mount()
 })();
