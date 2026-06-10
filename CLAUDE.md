@@ -52,6 +52,42 @@ Set either to `0`/`off` to disable. On a timeout the engine recovers to `idle` a
 
 After `build-book.sh` runs, the inner Claude outputs `%%ARISTOTLE_DONE:<path>%%`. The engine strips this from display, emits a `done` event with the resolved artifact path, and the TUI shows the `open` command then exits.
 
+## Ask the book
+
+`aristotle serve <breakdown-dir>` serves a built book on localhost (default
+port 4517) with the "ask the book" widget active. The widget is vanilla JS in
+`book-assets/ask-widget.js`, appended into every `breakdown.html` by
+`build-book.sh` (via `cat`, never the heredoc — bash must not expand the JS).
+
+Three layers, same separation discipline as the TUI: `ask/prompts.js` (pure
+prompt assembly), `ask/conversation.js` (`BookConversation` — rolling
+session, serial turn queue, edit detection, rebuild trigger; transport-free,
+unit-tested in `cli/tests/ask-conversation.test.js` via injected `run`),
+and `ask-server.js` (HTTP shell: routes, SSE, static files, CLI).
+
+In the browser: select text → "Ask ✦" chip → one inline chat panel. A single
+`POST /ask` SSE endpoint spawns `claude -p` with
+cwd = the book's *source* dir; the agent reads each message and decides
+whether it's a **question** (answer in prose) or a **change request** ("this
+opening is boring") — in which case it edits that one chapter's markdown and
+nothing else. The agent never builds: the server detects edits via an mtime
+scan after the turn, runs the incremental `build-book.sh` itself (~0.1s),
+and the page reloads.
+
+Context loading is dynamic per book, never hardcoded: the system prompt
+embeds the book's own `outline.md` (syllabus) and chapter-file listing, so
+most questions need zero file reads and chapter-specific ones exactly one.
+The panel shows a spinner + live tool activity (forwarded `tool_start`
+events) while the agent works, and a "+ New" button resets the rolling
+`--resume` session (`POST /reset`) for a clean context window.
+
+Requests run serially. The server binds 127.0.0.1 and rejects non-localhost
+origins. Export safety (HTML→EPUB/Kobo pipelines): the widget mounts ZERO UI
+unless `GET /health` answers, and `build-book.sh --no-ask-widget` omits the
+script entirely for conversion builds.
+E2E coverage: `cli/tests/ask-book.e2e.test.js` (real browser via puppeteer,
+fake `claude` shim on PATH — deterministic and free).
+
 ## Debug sessions
 
 Every `aristotle` run mints a session ID (`YYYYMMDD-HHMMSS-xxxx`) and writes three files to `~/.aristotle/sessions/<id>/`:
@@ -113,11 +149,16 @@ directly.
 BREAKDOWN.md          # Inner agent prompt (the product)
 PROFILE.md            # Student profile (created on first run)
 build-book.sh         # Markdown → HTML compiler
+book-assets/          # ask-widget.js, injected into every built book
 skills/               # Rendering skill docs for chapter agents
 verifiers/            # Visual verification scripts
 cli/
-  bin/aristotle.js    # Entry point
+  bin/aristotle.js    # Entry point (TUI; `serve` subcommand for ask-the-book)
   lib/claude.js       # Stream-json parser
+  lib/ask-server.js   # Ask-the-book HTTP shell (routes, SSE, static, CLI)
+  lib/ask/
+    conversation.js   # BookConversation: rolling session, serial turns, edit detection, rebuild
+    prompts.js        # Book context + system/turn prompt assembly (pure)
   lib/engine.js       # Conversation loop + session mgmt
   lib/session.js      # Per-run debug session dir + meta.json
   lib/tracker.js      # Chapter progress tracking

@@ -6,12 +6,14 @@ set -euo pipefail
 # Example: ./build-book.sh machine-learning
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <breakdown-directory> [--force]" >&2
+  echo "Usage: $0 <breakdown-directory> [--force] [--no-ask-widget]" >&2
   echo "Example: $0 machine-learning" >&2
   echo "" >&2
   echo "Re-runs are incremental: per-chapter HTML fragments are cached under" >&2
   echo ".build-cache/ and only regenerated when the source .md is newer." >&2
   echo "Pass --force to rebuild every chapter." >&2
+  echo "Pass --no-ask-widget for a clean export build (EPUB / Kobo / print)" >&2
+  echo "with no embedded ask-the-book script." >&2
   exit 1
 fi
 
@@ -22,9 +24,14 @@ OUTPUT="$BREAKDOWN_DIR/breakdown.html"
 CACHE_DIR="$BREAKDOWN_DIR/.build-cache"
 
 FORCE_REBUILD=0
-if [ "${2:-}" = "--force" ]; then
-  FORCE_REBUILD=1
-fi
+ASK_WIDGET=1
+for arg in "${@:2}"; do
+  case "$arg" in
+    --force) FORCE_REBUILD=1 ;;
+    --no-ask-widget) ASK_WIDGET=0 ;;
+    *) echo "Unknown flag: $arg" >&2; exit 1 ;;
+  esac
+done
 
 mkdir -p "$CACHE_DIR"
 
@@ -434,9 +441,19 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 });
 </script>
-</body>
-</html>
 HTMLEOF
+
+# "Ask the book" widget — appended verbatim (cat, not heredoc) so bash never
+# expands $/backticks inside the JS. Served by `aristotle serve <dir>`.
+# The widget self-gates at runtime (mounts no UI unless the ask server
+# answers /health), so it's inert in exports — but --no-ask-widget omits it
+# entirely for conversion pipelines (EPUB / Kobo / print) that keep scripts.
+if [ "$ASK_WIDGET" -eq 1 ]; then
+  echo '<script>' >> "$OUTPUT"
+  cat "$SCRIPT_DIR/book-assets/ask-widget.js" >> "$OUTPUT"
+  printf '</%s>\n' 'script' >> "$OUTPUT"
+fi
+printf '</body>\n</html>\n' >> "$OUTPUT"
 
 echo "Done: $OUTPUT ($NUM_CHAPTERS chapters, $REBUILT_COUNT rebuilt, $CACHED_COUNT cached)"
 echo "File size: $(du -h "$OUTPUT" | cut -f1)"

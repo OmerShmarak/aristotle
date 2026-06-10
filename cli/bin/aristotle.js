@@ -21,6 +21,15 @@ if (argv.includes('--help') || argv.includes('-h')) {
   process.exit(0);
 }
 
+// --- `aristotle serve <breakdown-dir>` — ask-the-book server, no TUI ---
+if (argv[0] === 'serve') {
+  const { runServeCli } = await import('../lib/ask-server.js');
+  await runServeCli(argv.slice(1), PROJECT_ROOT);
+  // Park here forever — the listening server owns the process from now on,
+  // and nothing below (the TUI path) may run.
+  await new Promise(() => {});
+}
+
 let resumeRequested = false;
 let resumeId = null;
 const positional = [];
