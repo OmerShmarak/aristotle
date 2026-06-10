@@ -59,8 +59,14 @@ port 4517) with the "ask the book" widget active. The widget is vanilla JS in
 `book-assets/ask-widget.js`, appended into every `breakdown.html` by
 `build-book.sh` (via `cat`, never the heredoc — bash must not expand the JS).
 
+Three layers, same separation discipline as the TUI: `ask/prompts.js` (pure
+prompt assembly), `ask/conversation.js` (`BookConversation` — rolling
+session, serial turn queue, edit detection, rebuild trigger; transport-free,
+unit-tested in `cli/tests/ask-conversation.test.js` via injected `run`),
+and `ask-server.js` (HTTP shell: routes, SSE, static files, CLI).
+
 In the browser: select text → "Ask ✦" chip → one inline chat panel. A single
-`POST /ask` SSE endpoint (`cli/lib/ask-server.js`) spawns `claude -p` with
+`POST /ask` SSE endpoint spawns `claude -p` with
 cwd = the book's *source* dir; the agent reads each message and decides
 whether it's a **question** (answer in prose) or a **change request** ("this
 opening is boring") — in which case it edits that one chapter's markdown and
@@ -149,7 +155,10 @@ verifiers/            # Visual verification scripts
 cli/
   bin/aristotle.js    # Entry point (TUI; `serve` subcommand for ask-the-book)
   lib/claude.js       # Stream-json parser
-  lib/ask-server.js   # Ask-the-book localhost server (ask + revise via claude -p)
+  lib/ask-server.js   # Ask-the-book HTTP shell (routes, SSE, static, CLI)
+  lib/ask/
+    conversation.js   # BookConversation: rolling session, serial turns, edit detection, rebuild
+    prompts.js        # Book context + system/turn prompt assembly (pure)
   lib/engine.js       # Conversation loop + session mgmt
   lib/session.js      # Per-run debug session dir + meta.json
   lib/tracker.js      # Chapter progress tracking
