@@ -8,8 +8,12 @@
 // and register it below.
 
 import { claudeCodeProvider } from './claude-code.js';
+import { codexProvider } from './codex.js';
 
 const providers = new Map();
+const aliases = new Map([
+  ['claude', 'claude-code'],
+]);
 
 export function registerProvider(provider) {
   if (!provider?.name) throw new Error('provider must have a name');
@@ -17,7 +21,8 @@ export function registerProvider(provider) {
 }
 
 export function getProvider(name) {
-  const p = providers.get(name);
+  const canonicalName = aliases.get(name) || name;
+  const p = providers.get(canonicalName);
   if (!p) throw new Error(`unknown provider: ${name}`);
   return p;
 }
@@ -27,7 +32,10 @@ export function listProviders() {
 }
 
 export function defaultProvider() {
+  const requested = process.env.ARISTOTLE_PROVIDER?.trim();
+  if (requested) return getProvider(requested);
   return claudeCodeProvider;
 }
 
 registerProvider(claudeCodeProvider);
+registerProvider(codexProvider);

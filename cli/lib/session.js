@@ -6,7 +6,7 @@ import { randomBytes } from 'crypto';
 // writes meta.json. The id is YYYYMMDD-HHMMSS-xxxx (4 random hex chars),
 // so `ls` is chronological and the random suffix keeps same-second launches
 // distinct.
-export function createSession({ topic, breakdownDir, claudeVersion, provider }) {
+export function createSession({ topic, breakdownDir, providerVersion, claudeVersion, provider }) {
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
   const stamp =
@@ -25,9 +25,11 @@ export function createSession({ topic, breakdownDir, claudeVersion, provider }) 
     startedAt: now.toISOString(),
     nodeVersion: process.version,
     claudeVersion: claudeVersion || null,
+    providerVersion: providerVersion || claudeVersion || null,
     platform: process.platform,
     provider: provider || null,
     providerSessionId: null,
+    providerSessions: {},
   };
   writeMeta(sessionDir, meta);
 

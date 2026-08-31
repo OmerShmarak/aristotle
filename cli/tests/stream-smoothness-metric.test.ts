@@ -68,7 +68,9 @@ test("streaming text exposes measurable smoothness metrics", async ({ terminal }
   expect(seenAt.size).toBeGreaterThanOrEqual(8);
 
   const firstVisibleAt = seenAt.get(LANDMARKS[0]);
-  expect(firstVisibleAt).toBeTruthy();
+  // Zero is a valid observation time when the first sample already contains
+  // the landmark; only an absent landmark should fail this assertion.
+  expect(firstVisibleAt).toBeDefined();
 
   const observedTimes = LANDMARKS
     .map(marker => seenAt.get(marker))

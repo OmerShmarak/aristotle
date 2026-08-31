@@ -22,6 +22,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 
 const { Engine } = await import('../lib/engine.js');
+const { registerProvider } = await import('../lib/providers/index.js');
 
 try {
   // 1. An existing session that we'll resume.
@@ -42,11 +43,26 @@ try {
   // Simulate the save the engine does after the first turn.
   engine._persistResumeToken();
 
+  // Switching providers must not copy the borrowed token into the fresh
+  // run's providerSessions map either.
+  registerProvider({
+    name: 'codex',
+    displayName: 'Codex',
+    check: async () => 'codex-test',
+    run: async () => ({ sessionId: null }),
+  });
+  await engine.switchProvider('codex');
+
   const freshMeta = readMeta(fresh.sessionDir);
   assert.equal(
     freshMeta.providerSessionId,
     null,
     'fresh debug session must not inherit the resumed providerSessionId',
+  );
+  assert.deepEqual(
+    freshMeta.providerSessions,
+    {},
+    'fresh debug session must not persist borrowed provider tokens',
   );
 
   const visible = listSessions();

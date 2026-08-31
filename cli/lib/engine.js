@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { defaultProvider } from './providers/index.js';
+import { defaultProvider, getProvider } from './providers/index.js';
 import { existsSync, symlinkSync } from 'fs';
 import { dirname, resolve } from 'path';
 import {
@@ -15,7 +15,7 @@ import { buildSystemPrompt } from './engine/system-prompt.js';
 import { updateMeta } from './session.js';
 
 /**
- * Aristotle engine — manages the conversation loop with Claude.
+ * Aristotle engine — manages the conversation loop with a CLI provider.
  *
  * Emits:
  *   'text'           { text, parentToolUseId }
@@ -27,15 +27,15 @@ import { updateMeta } from './session.js';
  *   'question'       { question, options, header, multiSelect } — pending AskUserQuestion
  *   'question_cleared' { }
  *   'turn_start'     { }                 — new user send begins
- *   'turn_end'       { }                 — Claude finished responding
+ *   'turn_end'       { }                 — provider finished responding
  *   'done'           { artifactPath }    — from %%ARISTOTLE_DONE:<path>%%
  *   'error'          { message }
  */
 export class Engine extends EventEmitter {
   /**
    * @param {string} projectRoot  - aristotle source dir (skills/, verifiers/, build-book.sh, BREAKDOWN.md)
-   * @param {string} breakdownDir - where the inner agent runs (cwd) and writes chapters. Typically `<projectRoot>/artifacts/<slug>`. The inner agent WILL see aristotle's CLAUDE.md via parent-walk; the briefing below tells it to ignore dev-facing leakage.
-   * @param {string} [sessionDir] - when provided, raw claude stream-json is written to <sessionDir>/claude.jsonl and every Engine event is mirrored to <sessionDir>/engine.jsonl for later debugging.
+   * @param {string} breakdownDir - where the inner agent runs (cwd) and writes chapters. Typically `<projectRoot>/artifacts/<slug>`.
+   * @param {string} [sessionDir] - when provided, raw provider JSONL and every normalized Engine event are logged for debugging.
    */
   constructor(projectRoot, breakdownDir, sessionDir, options = {}) {
     super();
@@ -44,19 +44,20 @@ export class Engine extends EventEmitter {
     this.sessionDir = sessionDir || null;
     this.provider = options.provider || defaultProvider();
     this.sessionId = null;
+    this._providerSessions = new Map();
     this.systemPrompt = null;
     this.phase = 'idle';
     this._donePath = null;
     this._pendingQuestion = null;
     this._probeActive = false;
     this._savedSessionId = null;
-    // True once setResume() borrows a token from a prior session. Stops the
-    // engine from re-persisting that token (and so duplicating the session)
-    // into this run's fresh debug dir. The original session remains the sole
-    // owner of its providerSessionId in the picker.
-    this._inheritedResume = false;
+    // Tracks tokens borrowed from prior sessions. Borrowed tokens must never
+    // be re-persisted into this run's fresh debug dir, or the picker would
+    // show duplicate resumable sessions.
+    this._inheritedProviderSessions = new Set();
     this._activeProc = null;
     this._interruptRequested = false;
+    this._providerErrorEvent = false;
     this._signalHandlers = {
       interrupt: () => this._signalActiveTurn('SIGINT', {
         alreadyRequested: this._interruptRequested,
@@ -66,7 +67,7 @@ export class Engine extends EventEmitter {
         },
       }),
     };
-    this._claudeLog = sessionDir ? resolve(sessionDir, 'claude.jsonl') : null;
+    this._initializedProviderLogs = new Set();
     this._engineLog = sessionDir ? resolve(sessionDir, 'engine.jsonl') : null;
     resetLog(this._engineLog);
     this._displayDir = null;
@@ -104,25 +105,21 @@ export class Engine extends EventEmitter {
     if (!version) {
       throw new Error(`Provider "${this.provider.name}" is not available.`);
     }
-    this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir);
-    // ARISTOTLE_EVENT_LOG overrides the session-dir path. Keeps legacy ad-hoc
-    // debugging (`ARISTOTLE_EVENT_LOG=/tmp/foo.jsonl aristotle ...`) working.
-    if (process.env.ARISTOTLE_EVENT_LOG) {
-      this._claudeLog = process.env.ARISTOTLE_EVENT_LOG;
-    }
-    resetLog(this._claudeLog);
+    this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir, this.provider);
+    this._prepareProviderLog();
     return version;
   }
 
   /**
-   * Send a message to Claude (or start a new session).
-   * Streams events via EventEmitter. Resolves when Claude finishes the turn.
+   * Send a message to the active provider (or start a new session).
+   * Streams events via EventEmitter. Resolves when the provider finishes.
    */
   async send(message) {
     this._setPhase('planning');
     this._sentinelStream.reset();
     this._donePath = null;
     this._interruptRequested = false;
+    this._providerErrorEvent = false;
     if (this._pendingQuestion) {
       this._pendingQuestion = null;
       this.emit('question_cleared');
@@ -134,6 +131,9 @@ export class Engine extends EventEmitter {
 
     const opts = {
       cwd: this.breakdownDir,
+      // The book workspace is the primary writable root. The source root is
+      // additionally writable so the agent can maintain PROFILE.md.
+      additionalDirs: [this.projectRoot],
       onEvent: (event) => this._handleEvent(event),
       onSpawn: (proc) => { this._activeProc = proc; },
       isAborted: () => this._interruptRequested,
@@ -142,22 +142,16 @@ export class Engine extends EventEmitter {
       // (see DEFAULT_*_TIMEOUT_MS). Env overrides for big builds / debugging.
       idleTimeoutMs: parseTimeoutMs(process.env.ARISTOTLE_IDLE_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS),
       hardTimeoutMs: parseTimeoutMs(process.env.ARISTOTLE_TURN_TIMEOUT_MS, DEFAULT_HARD_TIMEOUT_MS),
-      // Re-inject on every turn. Claude Code's `--resume` does NOT preserve
-      // `--append-system-prompt` from the original invocation — verified
-      // empirically: a pirate-persona system prompt on turn 1 was gone on
-      // the first --resume. Without this, every turn past the first runs
-      // with no BREAKDOWN.md, no operating-environment briefing, no
-      // absolute paths to aristotle's source — the model falls back to
-      // default "helpful assistant" behavior mid-pipeline.
+      // Re-inject on every turn. Provider resume behavior differs, so the
+      // engine does not rely on either CLI preserving appended instructions.
     };
 
     if (!this._probeActive) {
       opts.appendSystemPrompt = this.systemPrompt;
     }
 
-    if (this._claudeLog) {
-      opts.eventLog = this._claudeLog;
-    }
+    const providerLog = this._providerLogPath();
+    if (providerLog) opts.eventLog = providerLog;
 
     if (this.sessionId) {
       opts.resume = this.sessionId;
@@ -202,7 +196,7 @@ export class Engine extends EventEmitter {
         // A turn wedged (silent or runaway) and the watchdog killed it. Recover
         // to idle like an interrupt rather than leaving the TUI spinning.
         this.emit('error', {
-          message: `Turn aborted — ${err.message.replace(/^Claude run timed out: /, '')}. `
+          message: `Turn aborted — ${err.message.replace(/^(?:Claude|Codex) run timed out: /, '')}. `
             + 'Send another message to continue, or set ARISTOTLE_TURN_TIMEOUT_MS / '
             + 'ARISTOTLE_IDLE_TIMEOUT_MS to adjust the limit.',
         });
@@ -213,7 +207,9 @@ export class Engine extends EventEmitter {
         }
         return;
       }
-      this.emit('error', { message: err.message });
+      if (!err.alreadyEmitted && !this._providerErrorEvent) {
+        this.emit('error', { message: err.message });
+      }
       this._setPhase('idle');
       this.emit('turn_end');
       if (this._probeActive && !this._pendingQuestion) {
@@ -234,27 +230,116 @@ export class Engine extends EventEmitter {
     return this.send(PROBE_APPROVAL_PROMPT);
   }
 
+  /** Switch future turns to another registered provider. */
+  async switchProvider(name) {
+    if (this.phase !== 'idle' || this._activeProc) {
+      throw new Error('Wait for the current turn to finish before switching providers.');
+    }
+
+    const next = getProvider(name);
+    if (next.name === this.provider.name) {
+      const result = {
+        changed: false,
+        provider: next.name,
+        displayName: next.displayName || next.name,
+      };
+      return result;
+    }
+
+    const version = await next.check();
+    if (!version) {
+      throw new Error(`${next.displayName || next.name} is not available.`);
+    }
+
+    this._providerSessions.set(this.provider.name, this.sessionId);
+    this.provider = next;
+    this.sessionId = this._providerSessions.get(next.name) || null;
+    this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir, this.provider);
+    this._prepareProviderLog();
+
+    if (this._pendingQuestion) {
+      this._pendingQuestion = null;
+      this.emit('question_cleared');
+    }
+
+    this._persistProviderSelection(version);
+    const result = {
+      changed: true,
+      provider: next.name,
+      displayName: next.displayName || next.name,
+      resumed: Boolean(this.sessionId),
+      version,
+    };
+    return result;
+  }
+
   // Resume a prior conversation. The resume token is opaque to the engine —
   // whatever the provider stored on the original run.
-  setResume({ sessionId, breakdownDir } = {}) {
-    if (sessionId) this.sessionId = sessionId;
+  setResume({ sessionId, breakdownDir, providerSessions } = {}) {
+    if (providerSessions && typeof providerSessions === 'object') {
+      for (const [name, token] of Object.entries(providerSessions)) {
+        if (!token) continue;
+        this._providerSessions.set(name, token);
+        this._inheritedProviderSessions.add(name);
+      }
+    }
+    if (sessionId) {
+      this.sessionId = sessionId;
+      this._providerSessions.set(this.provider.name, sessionId);
+      this._inheritedProviderSessions.add(this.provider.name);
+    }
     if (breakdownDir) {
       this.breakdownDir = breakdownDir;
-      this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir);
+      this.systemPrompt = buildSystemPrompt(this.projectRoot, this.breakdownDir, this.provider);
     }
-    this._inheritedResume = true;
   }
 
   _persistResumeToken() {
+    this._providerSessions.set(this.provider.name, this.sessionId);
     if (!this.sessionDir) return;
-    if (this._inheritedResume) return;
+    if (this._inheritedProviderSessions.has(this.provider.name)) return;
     try {
       updateMeta(this.sessionDir, {
         provider: this.provider.name,
         providerSessionId: this.sessionId,
+        providerSessions: this._ownedProviderSessions(),
         breakdownDir: this.breakdownDir,
       });
     } catch { /* non-fatal */ }
+  }
+
+  _persistProviderSelection(version) {
+    if (!this.sessionDir) return;
+    const inherited = this._inheritedProviderSessions.has(this.provider.name);
+    try {
+      updateMeta(this.sessionDir, {
+        provider: this.provider.name,
+        providerVersion: version,
+        providerSessionId: inherited ? null : this.sessionId,
+        providerSessions: this._ownedProviderSessions(),
+        breakdownDir: this.breakdownDir,
+      });
+    } catch { /* non-fatal */ }
+  }
+
+  _providerLogPath() {
+    if (process.env.ARISTOTLE_EVENT_LOG) return process.env.ARISTOTLE_EVENT_LOG;
+    if (!this.sessionDir) return null;
+    return resolve(this.sessionDir, this.provider.logFile || `${this.provider.name}.jsonl`);
+  }
+
+  _ownedProviderSessions() {
+    return Object.fromEntries(
+      [...this._providerSessions]
+        .filter(([name, token]) => token && !this._inheritedProviderSessions.has(name)),
+    );
+  }
+
+  _prepareProviderLog() {
+    const path = this._providerLogPath();
+    if (!path || this._initializedProviderLogs.has(path)) return;
+    resetLog(path);
+    this._initializedProviderLogs.add(path);
   }
 
   signal(name) {
@@ -269,7 +354,7 @@ export class Engine extends EventEmitter {
     if (!this._activeProc || this.phase === 'idle') return false;
     if (alreadyRequested) return false;
     beforeSend?.();
-    // claude runs in its own process group (spawned detached), so signal the
+    // Providers run in their own process groups (spawned detached), so signal the
     // group to also stop subagents / background bash; fall back to the leader.
     try {
       process.kill(-this._activeProc.pid, processSignal);
@@ -310,7 +395,10 @@ export class Engine extends EventEmitter {
       case 'result':
         this._handlePermissionDenials(event.permissionDenials || []);
         if (!event.ok) {
-          this.emit('error', { message: `Error: ${event.subtype || 'unknown'}` });
+          this._providerErrorEvent = true;
+          const detail = event.error || event.result || event.message || event.subtype || 'unknown';
+          const label = this.provider.displayName || this.provider.name;
+          this.emit('error', { message: `${label} error: ${detail}` });
         }
         break;
     }
@@ -325,8 +413,8 @@ export class Engine extends EventEmitter {
 
   // Create a sibling symlink `<slug> -> run-XXX` so the artifact can be
   // opened at a topic-named path. We deliberately do NOT rename the cwd:
-  // Claude Code's `--resume <id>` validates the session against the cwd it
-  // was created in, and renaming the dir mid-conversation breaks resume
+  // Provider resume can validate the session against the cwd it was created
+  // in, and renaming the dir mid-conversation can break resume
   // permanently — even with metadata rewrites. Symlinks sidestep that.
   _ensureSlugLink(rawSlug) {
     if (this._displayDir) return;
@@ -375,6 +463,6 @@ export class Engine extends EventEmitter {
   }
 
   _buildSystemPrompt() {
-    return buildSystemPrompt(this.projectRoot, this.breakdownDir);
+    return buildSystemPrompt(this.projectRoot, this.breakdownDir, this.provider);
   }
 }

@@ -18,6 +18,7 @@ export class MockEngine extends EventEmitter {
   constructor(scriptPath) {
     super();
     this.scriptPath = scriptPath;
+    this.provider = { name: 'claude-code', displayName: 'Claude' };
     this._started = false;
     this._interrupted = false;
     this._sleepTimer = null;
@@ -43,16 +44,30 @@ export class MockEngine extends EventEmitter {
     this._replay();
   }
 
-  setResume({ sessionId, breakdownDir } = {}) {
+  setResume({ sessionId, breakdownDir, providerSessions } = {}) {
     this.sessionId = sessionId;
     this.breakdownDir = breakdownDir;
-    this._lastResume = { sessionId, breakdownDir };
+    this._lastResume = { sessionId, breakdownDir, providerSessions };
   }
 
   probeApproval() {
     if (this._started) return;
     this._started = true;
     this._replay();
+  }
+
+  async switchProvider(name) {
+    const providers = {
+      codex: { name: 'codex', displayName: 'Codex' },
+      claude: { name: 'claude-code', displayName: 'Claude' },
+      'claude-code': { name: 'claude-code', displayName: 'Claude' },
+    };
+    const next = providers[name];
+    if (!next) throw new Error(`unknown provider: ${name}`);
+    const changed = next.name !== this.provider.name;
+    this.provider = next;
+    const result = { changed, provider: next.name, displayName: next.displayName };
+    return result;
   }
 
   signal(name) {

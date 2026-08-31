@@ -31,6 +31,15 @@ aristotle
 
 Opens a chat. From there, do whatever you want — ask a quick question, request a full breakdown of a topic, follow up on something you read, rewrite a chapter you didn't like, drop a file with `@path`. The chat is the interface; breakdowns are one of the things it can produce.
 
+Claude is the default agent. Switch at any idle prompt without restarting:
+
+```
+/codex
+/claude
+```
+
+The input line always shows the active provider. Each provider keeps its own conversation token, so switching back resumes where that provider left off. To start directly with Codex (including on a machine without Claude Code), run `ARISTOTLE_PROVIDER=codex aristotle`.
+
 If you already know what you want, you can pre-seed the chat with your question:
 
 ```
@@ -145,6 +154,6 @@ These just generate the file — you transfer it yourself (USB, send to `@kindle
 
 ## Requirements
 
-- [Claude Code](https://claude.ai/claude-code)
+- At least one supported agent CLI: [Claude Code](https://claude.ai/claude-code) or [OpenAI Codex CLI](https://developers.openai.com/codex/cli/)
 - Node.js
 - [pandoc](https://pandoc.org/installing.html)

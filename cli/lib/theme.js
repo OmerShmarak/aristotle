@@ -45,6 +45,7 @@ export function printHelp() {
   console.log(colors.muted('  Without a topic: opens a chat.'));
   console.log(colors.muted('  -r / --resume [id]: resume a past session (picker if no id).\n'));
   console.log(colors.muted('  In chat you can tag files with @path (autocomplete),'));
+  console.log(colors.muted('  type /codex or /claude to switch agent providers,'));
   console.log(colors.muted('  use Ctrl+W / Option+Backspace to delete by word,'));
   console.log(colors.muted('  Ctrl+R to resume a past session,'));
   console.log(colors.muted('  and Ctrl+C to clear the input (press twice to exit).\n'));

@@ -7,7 +7,7 @@
     "aristotle": "./bin/aristotle.js"
   },
   "scripts": {
-    "test": "node test-tracker.js",
+    "test": "node --test tests/*.test.js && node test-tracker.js",
     "smoke": "node test-smoke.js",
     "tui-test": "tui-test"
   },

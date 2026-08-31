@@ -7,6 +7,8 @@ import { runClaude, checkClaude } from '../claude.js';
 
 export const claudeCodeProvider = {
   name: 'claude-code',
+  displayName: 'Claude',
+  logFile: 'claude.jsonl',
   run: runClaude,
   check: checkClaude,
 };
