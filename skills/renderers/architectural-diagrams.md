@@ -145,6 +145,24 @@ Do not indent raw HTML in chapter Markdown; Pandoc will escape indented HTML.
 
 Use a unique `arch-CNN-name` ID per board. Keep a real aspect ratio on the host so responsive SVGs have a nonzero height.
 
+### Phone-width strategy
+
+The saved `-mobile.png` is a design test, not a box-check. A wide section with gutter labels can become technically responsive but practically unreadable when all of it shrinks to a phone screen. If the preview makes labels smaller than ordinary body text:
+
+1. First crop harder or recompose the view vertically with a narrower `viewBox`.
+2. If the spatial relationship genuinely needs the width, preserve readable scale and allow horizontal scrolling instead of shrinking indefinitely:
+
+```html
+<div class="diagram-block">
+<div style="max-width:100%;overflow-x:auto">
+<div id="arch-CNN-wide" class="architecture-diagram" style="width:680px;height:450px;max-width:none"></div>
+</div>
+<div class="caption">Tell the reader what relationship to inspect.</div>
+</div>
+```
+
+The wrapper becomes the visual element discovered by `verify-render.js`; the inner `.architecture-diagram` remains discoverable by SVG collision checking and board screenshots. Horizontal scrolling is a fallback for irreducibly wide spatial views, not permission to keep unnecessary labels.
+
 ## Core SVG.js patterns
 
 ### Lines, shapes, and text
@@ -166,15 +184,22 @@ Keep labels horizontal. Put them in open margins and use leaders; do not write a
 ### Arrowheads and active paths
 
 ```javascript
-const loadHead = draw.marker(10, 10, function (add) {
-  add.path('M 0 0 L 10 5 L 0 10 z').fill(C.load);
-});
-loadHead.attr({ orient: 'auto', refX: 9, refY: 5 });
+const arrowheads = new Map();
+
+function arrowhead(color) {
+  if (arrowheads.has(color)) return arrowheads.get(color);
+  const head = draw.marker(10, 10, function (add) {
+    add.path('M 0 0 L 10 5 L 0 10 z').fill(color);
+  });
+  head.attr({ orient: 'auto', refX: 9, refY: 5 });
+  arrowheads.set(color, head);
+  return head;
+}
 
 function arrow(x1, y1, x2, y2, color = C.load, width = 3) {
   return draw.line(x1, y1, x2, y2)
     .stroke({ color, width, linecap: 'round' })
-    .marker('end', loadHead);
+    .marker('end', arrowhead(color));
 }
 ```
 
@@ -213,12 +238,7 @@ function leaderLabel(text, textX, textY, targetX, targetY, side = 'left') {
 }
 ```
 
-The leader stops before the text box. If a label truly needs a paper-colored backing plate, mark that backing shape `data-collision-ignore="true"`; never mark the actual teaching geometry to silence a failure.
-
-```javascript
-const bg = draw.rect(labelWidth + 10, 22).move(x - 5, y - 3).fill(C.paper);
-bg.attr({ 'data-collision-ignore': 'true' });
-```
+The leader stops before the text box. Keep labels outside teaching geometry even if a paper-colored plate could visually hide the overlap: the verifier deliberately checks the underlying relationship, not only the final paint order. Use `data-collision-ignore="true"` only for genuinely non-teaching container backgrounds or guides, never to silence real geometry.
 
 ### Dimensions and datums
 
@@ -307,7 +327,7 @@ node verifiers/verify-svg-collisions.js  <breakdown-dir> <chapter.md>
 node verifiers/screenshot-boards.js      <breakdown-dir> <chapter.md>
 ```
 
-`verify-svg-collisions.js` recognizes `.architecture-diagram` and checks its SVG text against drawing primitives. `screenshot-boards.js` saves the board to `_board-previews/`; inspect the PNG yourself. A clean collision report is only a floor.
+`verify-svg-collisions.js` recognizes `.architecture-diagram` and checks its SVG text against drawing primitives. `screenshot-boards.js` saves both full-width and `-mobile.png` phone-width previews for architectural boards in `_board-previews/`; inspect both yourself. A clean collision report is only a floor.
 
 Before shipping, check the preview at full width and approximately phone width:
 

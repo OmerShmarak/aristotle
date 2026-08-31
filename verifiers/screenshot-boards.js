@@ -84,12 +84,15 @@ async function main() {
     await page.goto('file://' + tmpFile, { waitUntil: 'networkidle0', timeout: 30000 });
     await new Promise((r) => setTimeout(r, 2000));
 
-    const boardIds = await page.evaluate(() => {
+    const boards = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('.jxgbox, .architecture-diagram'))
-        .map((b, i) => b.id || `svg-unnamed-${i}`);
+        .map((b, i) => ({
+          id: b.id || `svg-unnamed-${i}`,
+          architecture: b.classList.contains('architecture-diagram'),
+        }));
     });
 
-    if (boardIds.length === 0) {
+    if (boards.length === 0) {
       console.log(`No supported SVG boards found in ${chapterSlug}.md — nothing to screenshot.`);
       await browser.close();
       if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
@@ -97,7 +100,8 @@ async function main() {
     }
 
     const written = [];
-    for (const id of boardIds) {
+    for (const board of boards) {
+      const id = board.id;
       // getElementById handles IDs with any characters; CSS-selector escaping
       // differs by environment (CSS.escape is browser-only).
       const target = await page.evaluateHandle((boardId) => document.getElementById(boardId), id);
@@ -114,11 +118,35 @@ async function main() {
       written.push(path.relative(breakdownDir, outPath));
     }
 
+    // Architectural boards are explicitly responsive. Capture a phone-width
+    // preview as well so tiny labels and clipped gutters are visible during
+    // QA rather than discovered after publication.
+    const architecturalBoards = boards.filter((board) => board.architecture);
+    if (architecturalBoards.length > 0) {
+      await page.setViewport({ width: 390, height: 2000, deviceScaleFactor: 2 });
+      await new Promise((r) => setTimeout(r, 250));
+      for (const board of architecturalBoards) {
+        const target = await page.evaluateHandle((boardId) => document.getElementById(boardId), board.id);
+        if (!target) continue;
+        const box = await target.boundingBox();
+        if (!box || box.width < 2 || box.height < 2) {
+          await target.dispose();
+          continue;
+        }
+        const outPath = path.join(outDir, `${chapterSlug}-${board.id}-mobile.png`);
+        await target.screenshot({ path: outPath, type: 'png' });
+        await target.dispose();
+        written.push(path.relative(breakdownDir, outPath));
+      }
+    }
+
     await browser.close();
     if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
 
     if (jsErrors.length > 0) {
       for (const e of jsErrors) console.error(`  JS error: ${e}`);
+      console.error(`FAIL: ${jsErrors.length} JavaScript error(s) occurred while rendering board previews.`);
+      process.exit(1);
     }
 
     console.log(`Wrote ${written.length} board preview(s):`);

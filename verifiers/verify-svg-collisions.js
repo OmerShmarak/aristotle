@@ -156,8 +156,10 @@ async function main() {
         return Math.sqrt(cx * cx + cy * cy);
       }
 
-      // A "line-like" drawing (SVG <line>) uses exact segment-vs-rect; "area"
-      // drawings (polygon/path/circle/ellipse/rect) use bbox overlap.
+      // Line-like drawings use their actual geometry; filled area drawings use
+      // bbox overlap. In particular, an unfilled SVG path's bbox can cover a
+      // large empty region (or have zero height), so it must not be treated as
+      // a filled area.
       const results = { boards: 0, totalTexts: 0, collisions: [] };
 
       document.querySelectorAll('.jxgbox, .architecture-diagram').forEach((board, boardIdx) => {
@@ -202,10 +204,10 @@ async function main() {
           segments.push({ el, a, b });
         });
 
-        // Area-like primitives (polygon / path / circle / ellipse / rect /
-        // polyline): bbox overlap is a good-enough proxy.
+        // Area-like primitives: bbox overlap is a good-enough proxy for the
+        // simple filled shapes used by the supported renderers.
         const areas = [];
-        ['polygon', 'path', 'circle', 'ellipse', 'rect', 'polyline'].forEach((tag) => {
+        ['polygon', 'circle', 'ellipse', 'rect'].forEach((tag) => {
           svg.querySelectorAll(tag).forEach((el) => {
             if (el.closest('defs') || el.closest('[data-collision-ignore="true"]')) return;
             const r = rectOf(el);
@@ -213,6 +215,60 @@ async function main() {
             areas.push({ el, rect: r, tag });
           });
         });
+
+        // Paths and polylines may be filled areas, stroked geometry, or both.
+        // Keep those roles separate so an open route is checked along the
+        // route rather than against the empty interior of its bounding box.
+        const strokedGeometries = [];
+        ['path', 'polyline'].forEach((tag) => {
+          svg.querySelectorAll(tag).forEach((el) => {
+            if (el.closest('defs') || el.closest('[data-collision-ignore="true"]')) return;
+            const style = getComputedStyle(el);
+            const fillOpacity = parseFloat(style.fillOpacity || '1');
+            const strokeOpacity = parseFloat(style.strokeOpacity || '1');
+            const hasFill = style.fill !== 'none' && fillOpacity > 0;
+            const hasStroke = style.stroke !== 'none' && strokeOpacity > 0;
+            const r = rectOf(el);
+            if (hasFill && (r.width >= 1 || r.height >= 1)) {
+              areas.push({ el, rect: r, tag });
+            }
+            if (hasStroke && typeof el.getTotalLength === 'function') {
+              strokedGeometries.push({ el, tag });
+            }
+          });
+        });
+
+        function strokeLengthInsideText(el, textRect) {
+          const ctm = el.getScreenCTM();
+          if (!ctm) return 0;
+          const style = getComputedStyle(el);
+          const strokeWidth = parseFloat(style.strokeWidth || '1') || 1;
+          const scaleX = Math.hypot(ctm.a, ctm.b);
+          const scaleY = Math.hypot(ctm.c, ctm.d);
+          const maxScale = Math.max(scaleX, scaleY, 0.001);
+          const pad = strokeWidth * maxScale / 2 + 0.75;
+          const expanded = {
+            left: textRect.left - pad,
+            top: textRect.top - pad,
+            right: textRect.right + pad,
+            bottom: textRect.bottom + pad,
+          };
+          const total = el.getTotalLength();
+          if (!Number.isFinite(total) || total <= 0) return 0;
+          // Sample densely enough that the connecting segments are at most
+          // about 1.5 viewport pixels long, then clip those segments exactly.
+          const step = Math.max(0.25, 1.5 / maxScale);
+          let prevLocal = el.getPointAtLength(0);
+          let prev = toViewport(el, prevLocal.x, prevLocal.y);
+          let inside = 0;
+          for (let distance = step; distance < total + step; distance += step) {
+            const local = el.getPointAtLength(Math.min(distance, total));
+            const point = toViewport(el, local.x, local.y);
+            inside += lineLengthInsideRect(prev.x, prev.y, point.x, point.y, expanded);
+            prev = point;
+          }
+          return inside;
+        }
 
         for (const t of keptTexts) {
           const tArea = area(t.rect);
@@ -250,6 +306,23 @@ async function main() {
               textBbox: [Math.round(t.rect.left), Math.round(t.rect.top), Math.round(t.rect.right), Math.round(t.rect.bottom)],
             });
           }
+
+          // Geometry-aware clipping for unfilled/outlined paths and
+          // polylines. This catches a path crossing a label without treating
+          // the empty part of a curved path's bbox as ink.
+          for (const g of strokedGeometries) {
+            const len = strokeLengthInsideText(g.el, t.rect);
+            if (len <= 0) continue;
+            const threshold = Math.min(t.rect.width, t.rect.height) * overlapRatio;
+            if (len < threshold) continue;
+            results.collisions.push({
+              board: boardId,
+              text: t.text,
+              primitive: g.tag,
+              overlapRatio: +(len / Math.min(t.rect.width, t.rect.height)).toFixed(2),
+              textBbox: [Math.round(t.rect.left), Math.round(t.rect.top), Math.round(t.rect.right), Math.round(t.rect.bottom)],
+            });
+          }
         }
       });
 
@@ -259,8 +332,11 @@ async function main() {
     await browser.close();
     if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
 
+    let failed = false;
     if (jsErrors.length > 0) {
       for (const e of jsErrors) console.error(`  JS error: ${e}`);
+      console.error(`FAIL: ${jsErrors.length} JavaScript error(s) occurred while rendering SVG boards.`);
+      failed = true;
     }
 
     if (report.collisions.length > 0) {
@@ -271,8 +347,10 @@ async function main() {
         );
       }
       console.error(`FAIL: ${report.collisions.length} text/drawing collision(s) across ${report.boards} SVG board(s).`);
-      process.exit(1);
+      failed = true;
     }
+
+    if (failed) process.exit(1);
 
     console.log(`OK: ${report.totalTexts} text labels across ${report.boards} SVG board(s) — no collisions.`);
     process.exit(0);
