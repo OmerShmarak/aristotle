@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Verify that text labels don't overlap with drawings on JSXGraph SVG boards.
+// Verify that text labels don't overlap with drawings on SVG boards.
 // Usage: node verifiers/verify-svg-collisions.js <breakdown-dir> <chapter-file.md>
 //
-// Approach: render the chapter in a headless browser, locate every .jxgbox
-// container, collect bounding rects (via getBoundingClientRect) of:
+// Approach: render the chapter in a headless browser, locate every .jxgbox or
+// .architecture-diagram container, collect bounding rects (via
+// getBoundingClientRect) of:
 //   - text overlays JSXGraph drops beside the SVG (HTML divs/spans; where
 //     KaTeX output lives when useKatex:true)
 //   - <text> nodes inside the SVG itself (non-KaTeX fallback)
@@ -13,7 +14,7 @@
 // a drawing rect — significant meaning the overlap area exceeds 20% of the
 // text's area. Corner-touches and anti-aliasing nudges are tolerated.
 //
-// Cleanly no-ops when a chapter has no .jxgbox boards (same contract as
+// Cleanly no-ops when a chapter has no supported SVG boards (same contract as
 // verify-collisions.js when a chapter has no canvases).
 //
 // Exit code 0 = no collisions (or no boards). Non-zero = collisions found.
@@ -23,19 +24,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
+const { KATEX_HEAD, RENDERER_SCRIPTS, RENDERER_STYLES } = require('../cdn-scripts.js');
 
 const OVERLAP_RATIO = 0.2; // overlap area / text area
 
 function buildCdnTags() {
   return [
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>',
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js"></script>',
+    ...KATEX_HEAD,
+    ...RENDERER_STYLES.map((url) => `<link rel="stylesheet" href="${url}">`),
+    ...RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`),
   ].join('\n');
 }
 
@@ -90,9 +87,11 @@ async function main() {
     // Give JSXGraph + KaTeX time to settle.
     await new Promise((r) => setTimeout(r, 2000));
 
-    const boardCount = await page.evaluate(() => document.querySelectorAll('.jxgbox').length);
+    const boardCount = await page.evaluate(
+      () => document.querySelectorAll('.jxgbox, .architecture-diagram').length
+    );
     if (boardCount === 0) {
-      console.log('No JSXGraph boards found in chapter.');
+      console.log('No supported SVG boards found in chapter.');
       await browser.close();
       if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       process.exit(0);
@@ -161,10 +160,10 @@ async function main() {
       // drawings (polygon/path/circle/ellipse/rect) use bbox overlap.
       const results = { boards: 0, totalTexts: 0, collisions: [] };
 
-      document.querySelectorAll('.jxgbox').forEach((board, boardIdx) => {
+      document.querySelectorAll('.jxgbox, .architecture-diagram').forEach((board, boardIdx) => {
         results.boards++;
-        const boardId = board.id || `jxg-unnamed-${boardIdx}`;
-        const svg = board.querySelector('svg');
+        const boardId = board.id || `svg-unnamed-${boardIdx}`;
+        const svg = board.matches('svg') ? board : board.querySelector('svg');
         if (!svg) return;
 
         // Text rects: JSXGraph wraps each `board.create('text', ...)` in an
@@ -182,6 +181,7 @@ async function main() {
           keptTexts.push({ el, rect: r, text: el.textContent.trim().slice(0, 60) });
         });
         svg.querySelectorAll('text').forEach((el) => {
+          if (el.closest('defs') || el.closest('[data-collision-ignore="true"]')) return;
           if (!el.textContent || !el.textContent.trim()) return;
           const r = rectOf(el);
           if (r.width < 2 || r.height < 2) return;
@@ -192,6 +192,7 @@ async function main() {
         // Segments (SVG <line>): keep actual endpoints in viewport pixel coords.
         const segments = [];
         svg.querySelectorAll('line').forEach((el) => {
+          if (el.closest('defs') || el.closest('[data-collision-ignore="true"]')) return;
           const x1 = parseFloat(el.getAttribute('x1')) || 0;
           const y1 = parseFloat(el.getAttribute('y1')) || 0;
           const x2 = parseFloat(el.getAttribute('x2')) || 0;
@@ -206,6 +207,7 @@ async function main() {
         const areas = [];
         ['polygon', 'path', 'circle', 'ellipse', 'rect', 'polyline'].forEach((tag) => {
           svg.querySelectorAll(tag).forEach((el) => {
+            if (el.closest('defs') || el.closest('[data-collision-ignore="true"]')) return;
             const r = rectOf(el);
             if (r.width < 1 && r.height < 1) return;
             areas.push({ el, rect: r, tag });
@@ -264,15 +266,15 @@ async function main() {
     if (report.collisions.length > 0) {
       for (const c of report.collisions) {
         console.error(
-          `  COLLISION: "${c.text}" overlaps <${c.primitive}> on jxgbox#${c.board} ` +
+          `  COLLISION: "${c.text}" overlaps <${c.primitive}> on SVG board #${c.board} ` +
             `(ratio=${c.overlapRatio}) at [${c.textBbox.join(',')}]`
         );
       }
-      console.error(`FAIL: ${report.collisions.length} text/drawing collision(s) across ${report.boards} JSXGraph board(s).`);
+      console.error(`FAIL: ${report.collisions.length} text/drawing collision(s) across ${report.boards} SVG board(s).`);
       process.exit(1);
     }
 
-    console.log(`OK: ${report.totalTexts} text labels across ${report.boards} JSXGraph board(s) — no collisions.`);
+    console.log(`OK: ${report.totalTexts} text labels across ${report.boards} SVG board(s) — no collisions.`);
     process.exit(0);
   } catch (err) {
     await browser.close();

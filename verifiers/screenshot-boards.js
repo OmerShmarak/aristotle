@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Screenshot every JSXGraph board (.jxgbox) in a chapter, save as PNGs to
-// `<breakdown-dir>/_board-previews/`.
+// Screenshot every supported SVG board (.jxgbox or .architecture-diagram) in
+// a chapter, save as PNGs to `<breakdown-dir>/_board-previews/`.
 //
 // Usage: node verifiers/screenshot-boards.js <breakdown-dir> <chapter-file.md>
 //
@@ -17,17 +17,13 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
+const { KATEX_HEAD, RENDERER_SCRIPTS, RENDERER_STYLES } = require('../cdn-scripts.js');
 
 function buildCdnTags() {
   return [
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.js"></script>',
-    '<script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>',
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraph.css">',
-    '<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js"></script>',
+    ...KATEX_HEAD,
+    ...RENDERER_STYLES.map((url) => `<link rel="stylesheet" href="${url}">`),
+    ...RENDERER_SCRIPTS.map((url) => `<script src="${url}"></script>`),
   ].join('\n');
 }
 
@@ -43,6 +39,7 @@ ${buildCdnTags()}
 <style>
   body { background: #faf8f4; margin: 0; padding: 16px; font-family: Georgia, serif; }
   .jxgbox { border: none !important; background: transparent !important; }
+  .architecture-diagram { background: transparent !important; }
   .JXGtext { outline: none !important; font-family: Georgia, serif !important; }
 </style>
 </head>
@@ -88,11 +85,12 @@ async function main() {
     await new Promise((r) => setTimeout(r, 2000));
 
     const boardIds = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.jxgbox')).map((b, i) => b.id || `jxg-unnamed-${i}`);
+      return Array.from(document.querySelectorAll('.jxgbox, .architecture-diagram'))
+        .map((b, i) => b.id || `svg-unnamed-${i}`);
     });
 
     if (boardIds.length === 0) {
-      console.log(`No JSXGraph boards found in ${chapterSlug}.md — nothing to screenshot.`);
+      console.log(`No supported SVG boards found in ${chapterSlug}.md — nothing to screenshot.`);
       await browser.close();
       if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       process.exit(0);

@@ -19,6 +19,7 @@ const RENDERER_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js',
   'https://cdn.jsdelivr.net/npm/3dmol@2.4.0/build/3Dmol-min.js',
   'https://cdn.jsdelivr.net/npm/jsxgraph@1.12.2/distrib/jsxgraphcore.js',
+  'https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.2.8/dist/svg.min.js',
 ];
 
 const RENDERER_STYLES = [
