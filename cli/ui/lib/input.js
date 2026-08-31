@@ -2,6 +2,14 @@ export function isProbeCommand(value) {
   return value.trim() === '/probe-approval';
 }
 
+export function providerForCommand(value) {
+  switch (value.trim().toLowerCase()) {
+    case '/codex': return 'codex';
+    case '/claude': return 'claude-code';
+    default: return null;
+  }
+}
+
 export function normalizeAnswer(value, question) {
   if (!question) return value;
 

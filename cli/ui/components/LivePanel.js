@@ -17,6 +17,7 @@ export function LivePanel({
   smoother,
   status,
   projectFiles,
+  provider,
   chatHandlers,
 }) {
   const showSpinner =
@@ -49,7 +50,9 @@ export function LivePanel({
         onChange: chatHandlers.onChange,
         onSubmit: chatHandlers.onSubmit,
         onCtrlCEmpty: chatHandlers.onCtrlCEmpty,
-        placeholder: question ? answerPlaceholder(question) : 'Type a message, @ to tag a file',
+        placeholder: question
+          ? answerPlaceholder(question)
+          : `Type a message, @ to tag a file · ${provider}`,
         focus: true,
         projectFiles,
       }),

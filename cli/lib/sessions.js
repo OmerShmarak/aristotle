@@ -17,14 +17,24 @@ export function listSessions() {
       if (!st.isDirectory()) return null;
       const meta = readMeta(dir);
       if (!meta) return null;
+      const preferredProvider = meta.provider || 'claude-code';
+      let provider = preferredProvider;
+      let providerSessionId = meta.providerSessionId
+        || meta.providerSessions?.[preferredProvider]
+        || null;
+      if (!providerSessionId && meta.providerSessions) {
+        const fallback = Object.entries(meta.providerSessions).find(([, token]) => token);
+        if (fallback) [provider, providerSessionId] = fallback;
+      }
       return {
         id,
         dir,
         topic: meta.topic || '(chat)',
         startedAt: meta.startedAt || null,
         breakdownDir: meta.breakdownDir || null,
-        provider: meta.provider || null,
-        providerSessionId: meta.providerSessionId || null,
+        provider,
+        providerSessionId,
+        providerSessions: meta.providerSessions || {},
         mtimeMs: st.mtimeMs,
       };
     })

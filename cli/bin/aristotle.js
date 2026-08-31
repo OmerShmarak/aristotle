@@ -7,6 +7,7 @@ import React from 'react';
 import { render } from 'ink';
 import { App } from '../ui/App.js';
 import { Engine } from '../lib/engine.js';
+import { defaultProvider, getProvider } from '../lib/providers/index.js';
 import { createSession, sessionsDir, readMeta, updateMeta } from '../lib/session.js';
 import { listSessions, loadSessionMessages } from '../lib/sessions.js';
 import { getBannerText, printHelp } from '../lib/theme.js';
@@ -47,15 +48,24 @@ if (resumeRequested && resumeId) {
     console.error(`Session not found: ${resumeId}`);
     process.exit(1);
   }
-  if (!meta.providerSessionId) {
+  const preferredProvider = meta.provider || 'claude-code';
+  let resumedProvider = preferredProvider;
+  let resumedToken = meta.providerSessionId || meta.providerSessions?.[preferredProvider] || null;
+  if (!resumedToken && meta.providerSessions) {
+    const fallback = Object.entries(meta.providerSessions).find(([, token]) => token);
+    if (fallback) [resumedProvider, resumedToken] = fallback;
+  }
+  if (!resumedToken) {
     console.error(`Session ${resumeId} has no provider resume token (was it ever sent?).`);
     process.exit(1);
   }
   resumed = {
     id: resumeId,
-    providerSessionId: meta.providerSessionId,
+    providerSessionId: resumedToken,
     breakdownDir: meta.breakdownDir,
     messages: loadSessionMessages(resumeId),
+    provider: resumedProvider,
+    providerSessions: meta.providerSessions || {},
   };
 }
 
@@ -71,16 +81,27 @@ if (resumed?.breakdownDir && existsSync(resumed.breakdownDir)) {
 }
 
 // --- Create session (debug logs always live in a fresh dir) ---
+let initialProvider;
+try {
+  initialProvider = resumed?.provider
+    ? getProvider(resumed.provider)
+    : defaultProvider();
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+
 const { id: sessionId, sessionDir } = createSession({
   topic: topic || (resumed ? `(resumed ${resumed.id})` : '(chat)'),
   breakdownDir,
+  provider: initialProvider.name,
 });
 
 // --- Init engine ---
-const engine = new Engine(PROJECT_ROOT, breakdownDir, sessionDir);
-let claudeVersion = null;
+const engine = new Engine(PROJECT_ROOT, breakdownDir, sessionDir, { provider: initialProvider });
+let providerVersion = null;
 try {
-  claudeVersion = await engine.init();
+  providerVersion = await engine.init();
 } catch (err) {
   console.error(err.message);
   process.exit(1);
@@ -90,10 +111,16 @@ if (resumed) {
   engine.setResume({
     sessionId: resumed.providerSessionId,
     breakdownDir: resumed.breakdownDir,
+    providerSessions: resumed.providerSessions,
   });
 }
 
-updateMeta(sessionDir, { claudeVersion });
+updateMeta(sessionDir, {
+  provider: engine.provider.name,
+  providerVersion,
+  // Keep the legacy field populated for older debug tooling.
+  claudeVersion: engine.provider.name === 'claude-code' ? providerVersion : null,
+});
 
 // --- Render TUI ---
 const e = React.createElement;

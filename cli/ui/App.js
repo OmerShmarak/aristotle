@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import { useEngineState } from './hooks/useEngineState.js';
-import { isProbeCommand, normalizeAnswer } from './lib/input.js';
+import { isProbeCommand, normalizeAnswer, providerForCommand } from './lib/input.js';
 import { listProjectFiles } from './lib/files.js';
 import { injectTaggedFiles } from './lib/inject-files.js';
 import { Transcript } from './components/Transcript.js';
@@ -24,6 +24,9 @@ export function App({
   const { exit } = useApp();
   const [input, setInput] = useState('');
   const [started, setStarted] = useState(false);
+  const [activeProvider, setActiveProvider] = useState(
+    engine.provider?.displayName || engine.provider?.name || 'Claude',
+  );
   const [pickerOpen, setPickerOpen] = useState(!!showPickerInitial);
   const [pickerSessions, setPickerSessions] = useState([]);
   const submitLockRef = useRef(false);
@@ -71,6 +74,31 @@ export function App({
     engine.probeApproval();
   }, [appendMessage, engine]);
 
+  const runProviderCommand = useCallback(async (raw, providerName) => {
+    setInput('');
+    const baseId = Date.now();
+    appendMessage({ id: baseId, role: 'user', text: raw });
+    try {
+      const result = await engine.switchProvider(providerName);
+      setActiveProvider(result.displayName);
+      appendMessage({
+        id: `provider-${baseId}`,
+        role: 'assistant',
+        text: result.changed
+          ? `Switched to ${result.displayName}.`
+          : `Already using ${result.displayName}.`,
+      });
+    } catch (err) {
+      appendMessage({
+        id: baseId + 1,
+        role: 'error',
+        text: err.message,
+      });
+    } finally {
+      submitLockRef.current = false;
+    }
+  }, [appendMessage, engine]);
+
   // Auto-send the initial topic IF one was provided on the command line.
   // No topic → user gets an empty chat and starts the conversation.
   useEffect(() => {
@@ -99,6 +127,11 @@ export function App({
       queueMicrotask(() => { submitLockRef.current = false; });
       return;
     }
+    const providerName = providerForCommand(raw);
+    if (providerName) {
+      runProviderCommand(raw, providerName);
+      return;
+    }
 
     const displayText = normalizeAnswer(raw, question);
     const modelText = question
@@ -109,7 +142,7 @@ export function App({
     if (question) setQuestion(null);
     engine.send(modelText);
     queueMicrotask(() => { submitLockRef.current = false; });
-  }, [appendMessage, phase, engine, question, runProbeCommand, setQuestion, filesRoot]);
+  }, [appendMessage, phase, engine, question, runProbeCommand, runProviderCommand, setQuestion, filesRoot]);
 
   // When the engine emits `done`, append the open-it message to the transcript
   // and keep the chat open. No more auto-exit.
@@ -126,12 +159,26 @@ export function App({
 
   const [activeSessionId, setActiveSessionId] = useState(sessionId);
 
-  const handlePickSession = useCallback((picked) => {
+  const handlePickSession = useCallback(async (picked) => {
     if (!picked) return;
+    try {
+      if (picked.provider && picked.provider !== engine.provider?.name) {
+        const result = await engine.switchProvider(picked.provider);
+        setActiveProvider(result.displayName);
+      }
+    } catch (err) {
+      appendMessage({
+        id: `resume-provider-${Date.now()}`,
+        role: 'error',
+        text: err.message,
+      });
+      return;
+    }
     const restored = sessionsApi?.loadSessionMessages?.(picked.id) ?? [];
     engine.setResume({
       sessionId: picked.providerSessionId,
       breakdownDir: picked.breakdownDir,
+      providerSessions: picked.providerSessions,
     });
     const baseId = Date.now();
     const banner = {
@@ -145,7 +192,7 @@ export function App({
     setActiveSessionId(picked.id);
     setPickerOpen(false);
     setStarted(true);
-  }, [engine, sessionsApi, setMessages]);
+  }, [appendMessage, engine, sessionsApi, setMessages]);
 
   const handleCancelPicker = useCallback(() => {
     setPickerOpen(false);
@@ -226,6 +273,7 @@ export function App({
           smoother,
           status,
           projectFiles,
+          provider: activeProvider,
           chatHandlers: {
             onChange: handleInputChange,
             onSubmit: submitValue,

@@ -1,6 +1,6 @@
 # Aristotle CLI — Architecture
 
-Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
+Interactive TUI that wraps Claude Code and Codex CLI to generate personalized textbooks.
 
 ## How it works
 
@@ -18,26 +18,27 @@ Interactive TUI that wraps Claude Code CLI to generate personalized textbooks.
 │  loop          │ events   │   (React for term) │
 └───────┬────────┘          └───────────────────┘
         │
-┌───────▼────────┐
-│  lib/claude.js │
-│  Pure parser:  │
-│  stream-json → │
-│  normalized    │
-│  events        │
-└────────────────┘
+┌────────▼─────────┐
+│ lib/providers/   │
+│ claude.js        │
+│ Codex.js         │
+│ raw JSONL →      │
+│ normalized events│
+└──────────────────┘
 ```
 
 ## Layer responsibilities
 
-### `lib/claude.js` — Parser (no features, no UI)
-- Spawns `claude -p --output-format stream-json --include-partial-messages`
-- Translates raw Claude Code events into normalized events
+### `lib/claude.js` and `lib/Codex.js` — Parsers (no features, no UI)
+- Spawn `claude -p --output-format stream-json` or `codex exec --json`
+- Translate provider-specific events into one normalized event surface
 - Knows nothing about Aristotle, chapters, or UI
 - Event types used by Aristotle: `init`, `text`, `tool_start`, `task_started`, `turn_end`, `result`, `retry`, `error`
 
 ### `lib/engine.js` — Conversation loop
-- Manages session state (sessionId for `--resume`)
-- Calls `claude -p` for each turn, resumes session for follow-ups
+- Manages a separate session ID for every provider
+- Calls the active provider for each turn and resumes it for follow-ups
+- Switches providers through `/codex` and `/claude` without crossing session IDs
 - Delegates prompt construction, sentinel parsing, permission-question parsing, and event logging to helper modules under `lib/engine/`
 - Emits high-level events for the UI to consume
 - Tracks phase: `planning` → `writing` → `idle`
@@ -61,7 +62,7 @@ Supporting engine modules:
 - `ui/hooks/useEngineState.js` projects engine events into UI state
 - `ui/hooks/useStreamingText.js` owns live assistant text buffering
 - `ui/components/*` contains presentational pieces such as transcript, banner, live panel, progress bar, spinner, and pulsing text
-- `ui/lib/input.js` owns answer normalization and `/probe-approval` parsing
+- `ui/lib/input.js` owns answer normalization and slash-command parsing
 
 ### `lib/theme.js` — Colors and ASCII art
 - Warm earth tone palette
@@ -72,28 +73,28 @@ Supporting engine modules:
 ```
 User runs: aristotle "quantum mechanics"
 
-1. Engine sends: claude -p "I want to learn about: quantum mechanics"
-   └─ Claude asks knowledge diagnosis questions
+1. Engine sends the topic through the active provider
+   └─ The agent asks knowledge diagnosis questions
    └─ UI streams the response, shows input bar
 
-2. User types answer, engine sends: claude -p "answer" --resume <sessionId>
-   └─ Claude asks more questions or generates outline
+2. User types an answer; the engine resumes that provider's session
+   └─ The agent asks more questions or generates an outline
    └─ UI streams response
 
-3. User approves outline, engine sends: claude -p "approved" --resume <sessionId>
-   └─ Claude emits %%ARISTOTLE_CHAPTERS_TOTAL:N%% and spawns chapter agents
-   └─ Claude emits %%ARISTOTLE_CHAPTER_DONE:<id>%% per finalized chapter
+3. User approves the outline
+   └─ The agent emits %%ARISTOTLE_CHAPTERS_TOTAL:N%% and spawns chapter agents
+   └─ The agent emits %%ARISTOTLE_CHAPTER_DONE:<id>%% per finalized chapter
    └─ UI shows progress bar
 
-4. All chapters written → Claude compiles book
+4. All chapters written → the agent compiles the book
    └─ UI shows "done"
 ```
 
 ## Key constraint
 
-We wrap `claude -p` (one-shot per call) rather than the Claude API directly.
-This means users authenticate via their Claude subscription — no API keys needed.
-Each conversation turn is a separate process, linked via `--resume <sessionId>`.
+We wrap `claude -p` and `codex exec --json` rather than calling model APIs.
+Users authenticate through their CLI subscriptions. Each conversation turn is
+a separate process linked through that provider's resume token.
 
 ## Files
 
@@ -101,6 +102,8 @@ Each conversation turn is a separate process, linked via `--resume <sessionId>`.
 |------|---------|
 | `bin/aristotle.js` | Entry point |
 | `lib/claude.js` | Stream-json parser (translate raw → normalized events) |
+| `lib/Codex.js` | Codex JSONL parser (translate raw → normalized events) |
+| `lib/providers/` | Provider registry and adapters |
 | `lib/engine.js` | Conversation loop + session management |
 | `lib/engine/` | Prompt/sentinel/question/logging helpers used by the engine |
 | `lib/tracker.js` | Chapter progress tracking (pure data) |
