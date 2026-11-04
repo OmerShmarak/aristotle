@@ -7,13 +7,12 @@ const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "chat-done.jsonl");
 const CWD = resolve(__dirname, "fixtures", "chat-tree");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
 
 test.use({
   rows: 24,
   columns: 100,
   program: {
-    file: NODE22,
+    file: process.execPath,
     args: [HARNESS],
   },
   env: {

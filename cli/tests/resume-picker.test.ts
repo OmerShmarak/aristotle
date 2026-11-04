@@ -7,13 +7,12 @@ const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "resume-idle.jsonl");
 const SESSIONS = resolve(__dirname, "fixtures", "resume-sessions.json");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
 
 test.describe("resume picker", () => {
   test.use({
     rows: 30,
     columns: 120,
-    program: { file: NODE22, args: [HARNESS] },
+    program: { file: process.execPath, args: [HARNESS] },
     env: {
       ARISTOTLE_SCRIPT: SCRIPT,
       ARISTOTLE_SKIP_INITIAL_SEND: "1",
@@ -62,7 +61,7 @@ test.describe("ctrl-r in chat", () => {
   test.use({
     rows: 30,
     columns: 120,
-    program: { file: NODE22, args: [HARNESS] },
+    program: { file: process.execPath, args: [HARNESS] },
     env: {
       ARISTOTLE_SCRIPT: SCRIPT,
       ARISTOTLE_SKIP_INITIAL_SEND: "1",

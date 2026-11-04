@@ -90,23 +90,21 @@ would actually see — not raw bytes. The rationale and full patterns are in
 From `cli/`:
 
 ```bash
-PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm test
-PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm run tui-test
+npm test
+npm run tui-test
 ```
 
 Run a single spec:
 
 ```bash
-PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm run tui-test -- tests/<name>.test.ts
+npm run tui-test -- tests/<name>.test.ts
 ```
 
 If you've changed harness or mock code and your test acts strangely, clear the
 SWC cache first: `rm -rf cli/.tui-test/cache`.
 
-Node 22 is required (tui-test's node-pty doesn't build on Node 23, the
-project's default runtime). `brew install node@22` puts it at
-`/opt/homebrew/opt/node@22/bin/node`; the test file references that path
-directly.
+tui-test's node-pty doesn't build on Node 23; use any other supported Node
+(18/20/22/24). Tests launch the app via `process.execPath`.
 
 ## File layout
 

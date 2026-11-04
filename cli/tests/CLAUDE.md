@@ -32,19 +32,10 @@ bleeding-edge Node. See "Node version" below.
 
 ## Prerequisites
 
-**Node 22.** tui-test supports 18/20/22/24 but not 23. The project's default
-runtime is Node 23.11 (see `CLAUDE.md`), so tests are run against a separate,
-keg-only Node 22:
-
-```bash
-brew install node@22
-# It installs to /opt/homebrew/opt/node@22/ and is NOT symlinked into PATH.
-# Your default `node` stays Node 23. Tests hand an absolute path to tui-test.
-```
-
-The test file (`static-display.test.ts`) references
-`/opt/homebrew/opt/node@22/bin/node` directly in its `program.file`. If you
-are on a different machine or install Node 22 elsewhere, update that constant.
+**Node, not 23.** tui-test supports 18/20/22/24 but not 23 (node-pty won't
+build). Run under any supported Node; tests launch the app with
+`process.execPath`, i.e. the same Node. If your default is 23, switch first
+(e.g. `mise use node@22`).
 
 ---
 
@@ -53,12 +44,8 @@ are on a different machine or install Node 22 elsewhere, update that constant.
 From `cli/`:
 
 ```bash
-PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm run tui-test
+npm run tui-test
 ```
-
-(The `PATH` prefix is needed so tui-test's worker spawns a Node 22 process for
-itself; the program under test is launched via an absolute Node 22 path from
-the test file.)
 
 Expected output on green:
 
@@ -233,8 +220,7 @@ immediately. Use `terminal.getByText(...)` with its polling timeout (set via
 `expect.timeout` in the config). A single synchronous `getViewableBuffer()`
 can return stale contents.
 
-**node-pty builds fail on Node 23.** That's why we use Node 22. If a new
-Node 23+ prebuild lands and works, you can simplify this.
+**node-pty builds fail on Node 23.** Use a supported Node.
 
 **Text that wraps escapes the locator.** `getByText(/keep the pipeline/g)`
 will miss a line where "keep the" is on row N and "pipeline" is on row N+1.

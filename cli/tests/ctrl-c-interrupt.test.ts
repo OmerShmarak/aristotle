@@ -6,13 +6,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "ctrl-c-interrupt.jsonl");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
 
 test.use({
   rows: 24,
   columns: 100,
   program: {
-    file: NODE22,
+    file: process.execPath,
     args: [HARNESS],
   },
   env: {

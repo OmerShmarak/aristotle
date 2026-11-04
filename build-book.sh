@@ -34,6 +34,14 @@ if ! command -v pandoc &>/dev/null; then
   exit 1
 fi
 
+# pandoc >= 3.8 renamed --no-highlight to --syntax-highlighting=none; older
+# distro packages only know the former.
+if grep -q -- '--syntax-highlighting' <<<"$(pandoc --help)"; then
+  PANDOC_NO_HL="--syntax-highlighting=none"
+else
+  PANDOC_NO_HL="--no-highlight"
+fi
+
 if [ ! -d "$CHAPTERS_DIR" ]; then
   echo "Error: No chapters/ directory found in $BREAKDOWN_DIR" >&2
   exit 1
@@ -92,7 +100,7 @@ for i in "${!CHAPTER_FILES[@]}"; do
     STATUS="cached"
     CACHED_COUNT=$((CACHED_COUNT + 1))
   else
-    BODY=$(pandoc --from=markdown+tex_math_dollars --to=html5 --mathjax --syntax-highlighting=none "$FILE")
+    BODY=$(pandoc --from=markdown+tex_math_dollars --to=html5 --mathjax $PANDOC_NO_HL "$FILE")
     # Remove the first <h1> from body (we re-render it as the chapter header).
     BODY=$(echo "$BODY" | sed '0,/<h1[^>]*>.*<\/h1>/s///')
     printf '%s' "$BODY" > "$CACHE_FILE"
