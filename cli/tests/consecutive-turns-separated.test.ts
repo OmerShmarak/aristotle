@@ -6,7 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "consecutive-turns-separated.jsonl");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
+import { NODE22 } from "./node22.js";
 
 test.use({
   rows: 24,

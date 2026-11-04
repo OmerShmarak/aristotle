@@ -104,9 +104,8 @@ If you've changed harness or mock code and your test acts strangely, clear the
 SWC cache first: `rm -rf cli/.tui-test/cache`.
 
 Node 22 is required (tui-test's node-pty doesn't build on Node 23, the
-project's default runtime). `brew install node@22` puts it at
-`/opt/homebrew/opt/node@22/bin/node`; the test file references that path
-directly.
+project's default runtime). `cli/tests/node22.ts` locates it: Homebrew
+(`brew install node@22`) or mise (`mise install node@22`).
 
 ## File layout
 

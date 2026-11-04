@@ -7,7 +7,7 @@ const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "resume-idle.jsonl");
 const SESSIONS = resolve(__dirname, "fixtures", "resume-sessions.json");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
+import { NODE22 } from "./node22.js";
 
 test.describe("resume picker", () => {
   test.use({

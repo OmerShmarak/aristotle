@@ -7,7 +7,7 @@ const HARNESS = resolve(__dirname, "..", "bin", "aristotle-test-harness.js");
 const SCRIPT = resolve(__dirname, "fixtures", "chat-idle.jsonl");
 const CWD = resolve(__dirname, "fixtures", "chat-tree");
 
-const NODE22 = "/opt/homebrew/opt/node@22/bin/node";
+import { NODE22 } from "./node22.js";
 
 test.use({
   rows: 24,

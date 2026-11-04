@@ -153,7 +153,7 @@ export function App({
     appendMessage({
       id: Date.now(),
       role: 'assistant',
-      text: `Your breakdown is ready. Open it:\n  open ${completed.artifactPath}`,
+      text: `Your breakdown is ready. Open it:\n  ${process.platform === 'darwin' ? 'open' : 'xdg-open'} ${completed.artifactPath}`,
     });
   }, [completed, appendMessage]);
 
